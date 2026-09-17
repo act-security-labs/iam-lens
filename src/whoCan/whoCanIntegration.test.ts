@@ -2590,6 +2590,61 @@ const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
     }
   },
   {
+    name: 'KMS service principal with kms:CallerAccount is conditionally allowed',
+    description:
+      'A KMS key policy allows ecr.amazonaws.com only for calls associated with the key account and a matching ECR encryption context. whoCan must retain the service-principal grant as conditional rather than treating the caller account as absent.',
+    data: '2',
+    request: {
+      resource: 'arn:aws:kms:us-east-1:400000000002:key/test-key-service-caller-account',
+      actions: ['kms:Encrypt']
+    },
+    expected: {
+      who: [
+        {
+          action: 'Encrypt',
+          principal: 'ecr.amazonaws.com',
+          service: 'kms',
+          level: 'write',
+          resourceType: 'key',
+          conditions: {
+            conditionType: 'group',
+            operator: 'and',
+            conditions: [
+              conditionExpression(
+                'StringEquals',
+                'kms:CallerAccount',
+                ['400000000002'],
+                resourceAllowSource('AllowEcrServiceUse')
+              ),
+              conditionExpression(
+                'StringLike',
+                'kms:EncryptionContext:aws:ecr:arn',
+                ['arn:aws:ecr:us-east-1:400000000002:repository/example'],
+                resourceAllowSource('AllowEcrServiceUse')
+              )
+            ]
+          },
+          ignoredConditions: {
+            resource: {
+              allow: [
+                {
+                  key: 'kms:CallerAccount',
+                  op: 'StringEquals',
+                  values: ['400000000002']
+                },
+                {
+                  key: 'kms:EncryptionContext:aws:ecr:arn',
+                  op: 'StringLike',
+                  values: ['arn:aws:ecr:us-east-1:400000000002:repository/example']
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
     name: 'KMS kms:CallerAccount negative — non-existent account returns empty',
     simulationCounts: { withoutIndex: 24, withIndex: 0 },
     description:

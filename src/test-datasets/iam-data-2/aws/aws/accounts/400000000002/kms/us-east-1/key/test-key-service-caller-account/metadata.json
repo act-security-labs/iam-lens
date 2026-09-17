@@ -1,0 +1,5 @@
+{
+  "arn": "arn:aws:kms:us-east-1:400000000002:key/test-key-service-caller-account",
+  "name": "test-key-service-caller-account",
+  "region": "us-east-1"
+}
