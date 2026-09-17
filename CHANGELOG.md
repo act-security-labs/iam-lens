@@ -1,3 +1,10 @@
+## [0.1.159](https://github.com/act-security-labs/iam-lens/compare/v0.1.158...v0.1.159) (2026-09-17)
+
+
+### Bug Fixes
+
+* preserve KMS service principal caller account grants ([7fb7bb1](https://github.com/act-security-labs/iam-lens/commit/7fb7bb12a41971b8d90e5507c8e82f47e1fd6cce))
+
 ## [0.1.158](https://github.com/act-security-labs/iam-lens/compare/v0.1.157...v0.1.158) (2026-09-01)
 
 ## [0.1.157](https://github.com/act-security-labs/iam-lens/compare/v0.1.156...v0.1.157) (2026-09-01)
