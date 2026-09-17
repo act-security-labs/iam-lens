@@ -19,6 +19,7 @@ import { IamCollectClient, type SimulationOrgPolicies } from '../collect/client.
 import {
   getAllPoliciesForPrincipal,
   isServiceLinkedRole,
+  isServicePrincipal,
   principalExists,
   type PrincipalPolicies
 } from '../principals.js'
@@ -298,7 +299,9 @@ export async function simulateRequest(
     }
   }
 
-  const discoveryContextKeyConstraints = strictContextKeys.map(discoveryConstraintForStrictKey)
+  const discoveryContextKeyConstraints = strictContextKeys.map((keyName) =>
+    discoveryConstraintForStrictKey(keyName, simulationRequest)
+  )
 
   const result = await runSimulation(simulation, {
     simulationMode: simulationRequest.simulationMode,
@@ -321,9 +324,28 @@ const awsSourceKeyPrefix = 'aws:source'
  * instead of incorrectly denying service-principal statements.
  *
  * @param keyName the literal context key or slash-delimited key pattern
+ * @param simulationRequest the request whose context-key certainty is being modeled
  * @returns the Discovery constraint to pass to iam-simulate
  */
-function discoveryConstraintForStrictKey(keyName: string): DiscoveryContextKeyConstraint {
+function discoveryConstraintForStrictKey(
+  keyName: string,
+  simulationRequest: SimulationRequest
+): DiscoveryContextKeyConstraint {
+  const isServiceCallerAccountInDiscovery =
+    keyName.localeCompare('kms:CallerAccount', undefined, { sensitivity: 'base' }) === 0 &&
+    simulationRequest.simulationMode === 'Discovery' &&
+    isServicePrincipal(simulationRequest.principal)
+
+  if (isServiceCallerAccountInDiscovery) {
+    // AWS supplies this key for service-mediated KMS calls, but iam-lens does not know
+    // its value. Keep its presence authoritative while reporting conditional access.
+    return {
+      keyName,
+      presenceIsKnown: true,
+      valueIsKnown: false
+    }
+  }
+
   if (
     keyName.slice(0, 10).localeCompare(awsSourceKeyPrefix, undefined, { sensitivity: 'base' }) === 0
   ) {

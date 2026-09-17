@@ -18,6 +18,13 @@ import { type SimulationRequest } from './simulate.js'
  */
 export type ContextKeys = Record<string, string | string[]>
 
+/**
+ * Placeholder for the caller account AWS supplies on a service-mediated KMS request.
+ *
+ * iam-lens does not know the actual account, so Discovery treats this value as non-authoritative.
+ */
+export const servicePrincipalKmsCallerAccountPlaceholder = '111111111111'
+
 export const knownContextKeys: readonly string[] = [
   'aws:SecureTransport',
   'aws:CurrentTime',
@@ -206,6 +213,10 @@ export async function createContextKeys(
     contextKeys['aws:SourceOwner'] = simulationRequest.resourceAccount!
     contextKeys['aws:SourceOrgID'] = contextKeys['aws:ResourceOrgID']
     contextKeys['aws:SourceOrgPaths'] = contextKeys['aws:ResourceOrgPaths']
+
+    if (service.toLowerCase() === 'kms') {
+      contextKeys['kms:CallerAccount'] = servicePrincipalKmsCallerAccountPlaceholder
+    }
 
     if (simulationRequest.simulationMode === 'Discovery') {
       // Source key Discovery constraints make the concrete value non-authoritative;

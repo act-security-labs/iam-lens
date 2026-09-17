@@ -1,0 +1,18 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowEcrServiceUse",
+      "Effect": "Allow",
+      "Principal": { "Service": "ecr.amazonaws.com" },
+      "Action": "kms:Encrypt",
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": { "kms:CallerAccount": "400000000002" },
+        "StringLike": {
+          "kms:EncryptionContext:aws:ecr:arn": "arn:aws:ecr:us-east-1:400000000002:repository/example"
+        }
+      }
+    }
+  ]
+}

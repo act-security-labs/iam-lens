@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { testStore } from '../collect/inMemoryClient.js'
-import { createContextKeys } from './contextKeys.js'
+import { createContextKeys, servicePrincipalKmsCallerAccountPlaceholder } from './contextKeys.js'
 import { SimulationRequest } from './simulate.js'
 
 const defaultSimulationRequest: SimulationRequest = {
@@ -1582,6 +1582,46 @@ describe('createContextKeys', () => {
 
       // Then kms:CallerAccount should be set to the principal's account ID
       expect(contextKeys['kms:CallerAccount']).toBe('123456789012')
+    })
+
+    it('should set a placeholder kms:CallerAccount for KMS service-principal requests', async () => {
+      // Given a KMS request made by a service on behalf of an unknown caller account
+      const simulationRequest: SimulationRequest = {
+        ...defaultSimulationRequest,
+        principal: 'ecr.amazonaws.com',
+        action: 'kms:Encrypt'
+      }
+
+      // When creating context keys
+      const { contextKeys } = await createContextKeys(
+        testStore().client,
+        simulationRequest,
+        'kms',
+        {}
+      )
+
+      // Then discovery should model the service-mediated caller account as unknown
+      expect(contextKeys['kms:CallerAccount']).toBe(servicePrincipalKmsCallerAccountPlaceholder)
+    })
+
+    it('should not set kms:CallerAccount for non-KMS service-principal requests', async () => {
+      // Given a non-KMS request made by a service principal
+      const simulationRequest: SimulationRequest = {
+        ...defaultSimulationRequest,
+        principal: 'ecr.amazonaws.com',
+        action: 's3:PutObject'
+      }
+
+      // When creating context keys
+      const { contextKeys } = await createContextKeys(
+        testStore().client,
+        simulationRequest,
+        's3',
+        {}
+      )
+
+      // Then kms:CallerAccount should not be set
+      expect(contextKeys['kms:CallerAccount']).toBeUndefined()
     })
 
     it('should not set kms:CallerAccount for non-KMS actions', async () => {
