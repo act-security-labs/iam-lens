@@ -1,6 +1,6 @@
 {
   "name": "@actsecurity/iam-lens",
-  "version": "0.1.159",
+  "version": "0.1.160",
   "description": "Visibility in IAM in and across AWS accounts",
   "keywords": [
     "aws",

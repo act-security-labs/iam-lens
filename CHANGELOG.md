@@ -1,3 +1,10 @@
+## [0.1.160](https://github.com/act-security-labs/iam-lens/compare/v0.1.159...v0.1.160) (2026-09-19)
+
+
+### Bug Fixes
+
+* use updated dependency updater action ([9731510](https://github.com/act-security-labs/iam-lens/commit/9731510af1df7f679f8a846820fed6a3a1110e0a))
+
 ## [0.1.159](https://github.com/act-security-labs/iam-lens/compare/v0.1.158...v0.1.159) (2026-09-17)
 
 
