@@ -2,7 +2,12 @@ import { type EvaluationResult } from '@actsecurity/iam-simulate'
 import { assert, describe, expect, it } from 'vitest'
 import { testStore } from '../collect/inMemoryClient.js'
 import { saveRole, saveUser } from '../utils/testUtils.js'
-import { resultMatchesExpectation, simulateRequest, type SimulationRequest } from './simulate.js'
+import {
+  discoveryConstraintForStrictKey,
+  resultMatchesExpectation,
+  simulateRequest,
+  type SimulationRequest
+} from './simulate.js'
 
 describe('simulateRequest', () => {
   it('should throw an error if the resource account id cannot be determined', async () => {
@@ -392,6 +397,82 @@ describe('aws:userid strict context key behavior', () => {
     }
     //Then access should be allowed because the userid matches the condition
     expect(result.overallResult).toBe('Allowed')
+  })
+})
+
+describe('caller-provided Discovery context keys', () => {
+  it('should evaluate a caller-provided SourceVpc value exactly', async () => {
+    // Given a role whose Allow requires a specific source VPC
+    const { store, client } = testStore()
+    const roleArn = 'arn:aws:iam::123456789012:role/VpcRole'
+    await saveRole(store, {
+      arn: roleArn,
+      inlinePolicies: [
+        {
+          PolicyName: 'SourceVpcAccess',
+          PolicyDocument: {
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: 's3:ListBucket',
+                Resource: '*',
+                Condition: {
+                  StringEquals: {
+                    'aws:SourceVpc': 'vpc-expected'
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    })
+
+    // When simulating with a caller-provided nonmatching source VPC in Discovery mode
+    const { result } = await simulateRequest(
+      {
+        simulationMode: 'Discovery',
+        principal: roleArn,
+        resourceArn: 'arn:aws:s3:::example-bucket',
+        resourceAccount: '123456789012',
+        action: 's3:ListBucket',
+        customContextKeys: {
+          'aws:SourceVpc': 'vpc-other'
+        }
+      },
+      client
+    )
+
+    // Then the precise caller value should make the conditional Allow not apply
+    if (result.resultType === 'error') {
+      assert.fail(`Simulation resulted in error: ${result.errors.message}`)
+    }
+    expect(result.overallResult).toBe('ImplicitlyDenied')
+  })
+
+  it('should treat a caller-provided KMS caller account as known', () => {
+    // Given a Discovery service-principal request with an alternate-case caller account
+    const request: SimulationRequest = {
+      simulationMode: 'Discovery',
+      principal: 'ecr.amazonaws.com',
+      resourceArn: 'arn:aws:kms:us-east-1:123456789012:key/example',
+      resourceAccount: '123456789012',
+      action: 'kms:Encrypt',
+      customContextKeys: {
+        'KMS:calleraccount': '999999999999'
+      }
+    }
+
+    // When resolving the constraint for the canonical key spelling
+    const constraint = discoveryConstraintForStrictKey('kms:CallerAccount', request)
+
+    // Then the caller-supplied value should be authoritative
+    expect(constraint).toEqual({
+      keyName: 'kms:CallerAccount',
+      presenceIsKnown: true,
+      valueIsKnown: true
+    })
   })
 })
 

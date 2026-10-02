@@ -1669,6 +1669,27 @@ describe('createContextKeys', () => {
       expect(contextKeys['aws:CustomKey']).toBe('custom-value')
     })
 
+    it('should replace generated keys case-insensitively', async () => {
+      // Given a simulation request and an alternate-case override for a generated key
+      const overrides = {
+        'AWS:principalaccount': 'override-account'
+      }
+
+      // When creating context keys with overrides
+      const { contextKeys } = await createContextKeys(
+        testStore().client,
+        defaultSimulationRequest,
+        's3',
+        overrides
+      )
+
+      // Then only the caller-provided key and value should remain
+      expect(contextKeys['AWS:principalaccount']).toBe('override-account')
+      expect(
+        Object.keys(contextKeys).filter((key) => key.toLowerCase() === 'aws:principalaccount')
+      ).toEqual(['AWS:principalaccount'])
+    })
+
     it('should add keys that are in the overrides only', async () => {
       // Given a simulation request and an override for a key not otherwise set
       const simulationRequest: SimulationRequest = {

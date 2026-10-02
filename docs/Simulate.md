@@ -224,7 +224,9 @@ For services that support [enhanced VPC endpoint context keys](https://aws.amazo
 
 ### Overriding Default Context Keys
 
-Any context keys supplied via the `--context key value [value2] [value3]` argument will override the defaults described above. For example:
+Any context keys supplied via the `--context key value [value2] [value3]` argument will override the defaults described above, using case-insensitive IAM context-key matching.
+
+For example:
 
 ```bash
 iam-lens simulate \
