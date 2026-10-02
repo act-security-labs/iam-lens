@@ -225,11 +225,10 @@ export async function createContextKeys(
     }
   }
 
-  //Apply any custom context key overrides
-  for (const [key, value] of Object.entries(contextKeyOverrides)) {
-    contextKeys[key] = value
-  }
+  applyContextKeyOverrides(contextKeys, contextKeyOverrides)
 
+  // VPC enrichment reads keys case-insensitively and only adds missing values, so it
+  // can use caller-provided VPC inputs without replacing any caller-provided value.
   //Add VPC context keys
   const vpcKeys = await getVpcKeys(contextKeys, service, collectClient)
   for (const [key, value] of Object.entries(vpcKeys)) {
@@ -239,6 +238,28 @@ export async function createContextKeys(
   return {
     resourceTagsAreKnown,
     contextKeys
+  }
+}
+
+/**
+ * Applies caller-provided context values over generated values using IAM's
+ * case-insensitive context-key matching.
+ *
+ * @param contextKeys the generated request context to update
+ * @param contextKeyOverrides the caller-provided authoritative values
+ */
+function applyContextKeyOverrides(
+  contextKeys: ContextKeys,
+  contextKeyOverrides: ContextKeys
+): void {
+  for (const [key, value] of Object.entries(contextKeyOverrides)) {
+    const generatedKey = Object.keys(contextKeys).find(
+      (contextKey) => contextKey.toLowerCase() === key.toLowerCase()
+    )
+    if (generatedKey && generatedKey !== key) {
+      delete contextKeys[generatedKey]
+    }
+    contextKeys[key] = value
   }
 }
 

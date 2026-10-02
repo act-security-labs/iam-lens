@@ -64,7 +64,8 @@ export interface SimulationRequest {
   // anonymous?: boolean
 
   /**
-   * Any custom context keys to use for the simulation.
+   * Caller-provided context values for the simulation. These override generated values
+   * case-insensitively and are authoritative in Discovery mode.
    */
   customContextKeys: ContextKeys
 
@@ -316,21 +317,31 @@ const awsSourceKeyPrefix = 'aws:source'
 /**
  * Converts an iam-lens strict context key into an iam-simulate Discovery constraint.
  *
- * Most strict keys should preserve the old behavior where both presence and
- * value are authoritative. Service source context keys are different during
- * who-can discovery: iam-lens supplies resource-derived placeholder values, but
- * the actual source account/org for a service principal request may differ.
- * Treating those values as unknown lets who-can return conditional access
- * instead of incorrectly denying service-principal statements.
+ * Caller-provided keys are always authoritative. Other strict keys preserve the
+ * existing behavior where both presence and value are authoritative. Service
+ * source context keys are different during who-can discovery: iam-lens supplies
+ * resource-derived placeholder values, but the actual source account/org for a
+ * service principal request may differ. Treating those values as unknown lets
+ * who-can return conditional access instead of incorrectly denying service-principal
+ * statements.
  *
  * @param keyName the literal context key or slash-delimited key pattern
  * @param simulationRequest the request whose context-key certainty is being modeled
  * @returns the Discovery constraint to pass to iam-simulate
+ * @internal
  */
-function discoveryConstraintForStrictKey(
+export function discoveryConstraintForStrictKey(
   keyName: string,
   simulationRequest: SimulationRequest
 ): DiscoveryContextKeyConstraint {
+  if (hasCustomContextKey(simulationRequest.customContextKeys, keyName)) {
+    return {
+      keyName,
+      presenceIsKnown: true,
+      valueIsKnown: true
+    }
+  }
+
   const isServiceCallerAccountInDiscovery =
     keyName.localeCompare('kms:CallerAccount', undefined, { sensitivity: 'base' }) === 0 &&
     simulationRequest.simulationMode === 'Discovery' &&
@@ -361,6 +372,23 @@ function discoveryConstraintForStrictKey(
     presenceIsKnown: true,
     valueIsKnown: true
   }
+}
+
+/**
+ * Checks whether a caller supplied a context key using IAM's case-insensitive key matching.
+ *
+ * @param customContextKeys the caller-provided context values
+ * @param keyName the context key to look up
+ * @returns whether the caller supplied a value for the key
+ */
+function hasCustomContextKey(customContextKeys: ContextKeys, keyName: string): boolean {
+  if (Object.hasOwn(customContextKeys, keyName)) {
+    return true
+  }
+
+  return Object.keys(customContextKeys).some(
+    (customKey) => customKey.toLowerCase() === keyName.toLowerCase()
+  )
 }
 
 async function getResourcePolicies(

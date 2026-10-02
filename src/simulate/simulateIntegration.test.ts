@@ -388,6 +388,72 @@ const simulateIntegrationTest: {
     expected: 'Allowed'
   },
   {
+    name: 'caller-provided matching SourceArn is authoritative in Discovery mode',
+    comment:
+      'An explicit matching SourceArn must be evaluated exactly rather than as the service-principal placeholder value.',
+    data: '1',
+    request: {
+      resourceArn: 'arn:aws:s3:::source-arn-deny-bucket/object.txt',
+      resourceAccount: undefined,
+      action: 's3:PutObject',
+      principal: 'cloudtrail.amazonaws.com',
+      customContextKeys: {
+        'aws:SourceArn': 'arn:aws:cloudtrail:us-east-1:200000000002:trail/example'
+      },
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed'
+  },
+  {
+    name: 'caller-provided nonmatching SourceArn is authoritative in Discovery mode',
+    comment:
+      'An explicit nonmatching SourceArn must trigger the bucket policy Deny rather than remain conditionally allowed.',
+    data: '1',
+    request: {
+      resourceArn: 'arn:aws:s3:::source-arn-deny-bucket/object.txt',
+      resourceAccount: undefined,
+      action: 's3:PutObject',
+      principal: 'cloudtrail.amazonaws.com',
+      customContextKeys: {
+        'aws:SourceArn': 'arn:aws:cloudtrail:us-east-1:200000000002:channel/example'
+      },
+      simulationMode: 'Discovery'
+    },
+    expected: 'ExplicitlyDenied'
+  },
+  {
+    name: 'caller-provided matching SourceVpc is authoritative in Discovery mode',
+    data: '1',
+    request: {
+      resourceArn: 'arn:aws:s3:::vpc-bucket',
+      resourceAccount: undefined,
+      action: 's3:ListBucket',
+      principal: 'arn:aws:iam::200000000002:role/VpcBucketRole',
+      customContextKeys: {
+        'aws:SourceVpc': 'vpc-123456789'
+      },
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed'
+  },
+  {
+    name: 'alternate-case caller-provided nonmatching SourceVpc is authoritative in Discovery mode',
+    comment:
+      'IAM context key matching is case-insensitive, so this custom value must replace derived context and make the Allow fail.',
+    data: '1',
+    request: {
+      resourceArn: 'arn:aws:s3:::vpc-bucket',
+      resourceAccount: undefined,
+      action: 's3:ListBucket',
+      principal: 'arn:aws:iam::200000000002:role/VpcBucketRole',
+      customContextKeys: {
+        'AWS:sourceVpc': 'vpc-other'
+      },
+      simulationMode: 'Discovery'
+    },
+    expected: 'ImplicitlyDenied'
+  },
+  {
     name: 'resource policy Allow without Principal does not allow cross-account access',
     comment:
       'The Allow statement on no-principal-bucket has no Principal element. Cross-account access requires both identity and resource policy allows; with the Allow silent, the request is ImplicitlyDenied.',
