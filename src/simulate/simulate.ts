@@ -38,6 +38,8 @@ import {
   knownContextKeys
 } from './contextKeys.js'
 
+const kmsRetireGrantAction = 'kms:retiregrant'
+
 /**
  * The request details for simulating an IAM request.
  */
@@ -174,6 +176,7 @@ export async function simulateRequest(
 
   const { resourcePolicy, resourceRcps } = await getResourcePolicies(
     collectClient,
+    simulationRequest.action,
     simulationRequest.resourceArn,
     simulationRequest.resourceAccount
   )
@@ -391,8 +394,21 @@ function hasCustomContextKey(customContextKeys: ContextKeys, keyName: string): b
   )
 }
 
+/**
+ * Retrieves resource policies and the RCP hierarchy applicable to a simulation request.
+ *
+ * AWS does not apply RCPs to `kms:RetireGrant` or AWS-managed KMS keys, so those
+ * requests retain their resource policy while omitting the RCP hierarchy.
+ *
+ * @param collectClient the IAM collect client to use for data access
+ * @param action the action being simulated
+ * @param resourceArn the ARN of the resource being accessed
+ * @param resourceAccount the account ID of the resource, if known
+ * @returns the resource policy and applicable RCP hierarchy for the request
+ */
 async function getResourcePolicies(
   collectClient: IamCollectClient,
+  action: string,
   resourceArn: string | undefined,
   resourceAccount: string | undefined
 ): Promise<{
@@ -408,7 +424,21 @@ async function getResourcePolicies(
     resourceArn,
     resourceAccount
   )
-  const resourceRcps = await getRcpsForResource(collectClient, resourceArn, resourceAccount)
+
+  if (action.localeCompare(kmsRetireGrantAction, undefined, { sensitivity: 'base' }) === 0) {
+    return { resourcePolicy, resourceRcps: [] }
+  }
+
+  const resourceArnParts = splitArnParts(resourceArn)
+  const isAwsManagedKmsKey =
+    resourceArnParts.service === 'kms' &&
+    resourceArnParts.resourceType === 'key' &&
+    resourceAccount !== undefined &&
+    (await collectClient.isAwsManagedKmsKey(resourceArn, resourceAccount))
+
+  const resourceRcps = isAwsManagedKmsKey
+    ? []
+    : await getRcpsForResource(collectClient, resourceArn, resourceAccount)
 
   return { resourcePolicy, resourceRcps }
 }

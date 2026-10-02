@@ -7,6 +7,9 @@
   "400000000002": {
     "ou": "ou-ab12-child1",
     "scps": ["arn:aws:organizations::aws:policy/service_control_policy/p-FullAWSAccess"],
-    "rcps": ["arn:aws:organizations::aws:policy/resource_control_policy/p-RCPFullAWSAccess"]
+    "rcps": [
+      "arn:aws:organizations::aws:policy/resource_control_policy/p-RCPFullAWSAccess",
+      "arn:aws:organizations::aws:policy/resource_control_policy/p-kms-rcp-deny"
+    ]
   }
 }

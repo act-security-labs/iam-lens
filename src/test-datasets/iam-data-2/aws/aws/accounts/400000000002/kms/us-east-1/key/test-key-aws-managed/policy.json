@@ -1,0 +1,11 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": { "AWS": "arn:aws:iam::400000000002:role/kms-user" },
+      "Action": "kms:Decrypt",
+      "Resource": "*"
+    }
+  ]
+}

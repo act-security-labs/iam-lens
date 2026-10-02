@@ -1,5 +1,5 @@
 import { type EvaluationResult } from '@actsecurity/iam-simulate'
-import { assert, describe, expect, it } from 'vitest'
+import { assert, describe, expect, it, vi } from 'vitest'
 import { testStore } from '../collect/inMemoryClient.js'
 import { saveRole, saveUser } from '../utils/testUtils.js'
 import {
@@ -221,6 +221,108 @@ describe('simulateRequest', () => {
         message: 'One of Principal or NotPrincipal is required in a trust policy'
       }
     ])
+  })
+})
+
+describe('RCP simulation exclusions', () => {
+  const accountId = '123456789012'
+  const principalArn = `arn:aws:iam::${accountId}:user/test-user`
+  const keyArn = `arn:aws:kms:us-east-1:${accountId}:key/test-key`
+
+  it('should omit RCPs for a case-insensitive kms:RetireGrant action', async () => {
+    //Given a KMS request with a customer-managed key and an RCP hierarchy spy
+    const { store, client } = testStore()
+    await saveUser(store, { arn: principalArn })
+    await store.saveResourceMetadata(accountId, keyArn, 'metadata', { awsManaged: false })
+    const rcpHierarchySpy = vi.spyOn(client, 'getRcpHierarchyForAccount')
+
+    //When simulating a mixed-case kms:RetireGrant action
+    await simulateRequest(
+      {
+        simulationMode: 'Strict',
+        principal: principalArn,
+        resourceArn: keyArn,
+        resourceAccount: accountId,
+        action: 'KMS:retiregrant',
+        customContextKeys: {}
+      },
+      client
+    )
+
+    //Then only the principal RCP hierarchy should be requested
+    expect(rcpHierarchySpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('should omit RCPs for an AWS-managed KMS key', async () => {
+    //Given a non-RetireGrant KMS request targeting an AWS-managed key
+    const { store, client } = testStore()
+    await saveUser(store, { arn: principalArn })
+    await store.saveResourceMetadata(accountId, keyArn, 'metadata', { awsManaged: true })
+    const rcpHierarchySpy = vi.spyOn(client, 'getRcpHierarchyForAccount')
+
+    //When simulating the request
+    await simulateRequest(
+      {
+        simulationMode: 'Strict',
+        principal: principalArn,
+        resourceArn: keyArn,
+        resourceAccount: accountId,
+        action: 'kms:Decrypt',
+        customContextKeys: {}
+      },
+      client
+    )
+
+    //Then only the principal RCP hierarchy should be requested
+    expect(rcpHierarchySpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('should include RCPs when KMS key management metadata is missing', async () => {
+    //Given a non-RetireGrant KMS request without key management metadata
+    const { store, client } = testStore()
+    await saveUser(store, { arn: principalArn })
+    const rcpHierarchySpy = vi.spyOn(client, 'getRcpHierarchyForAccount')
+
+    //When simulating the request
+    await simulateRequest(
+      {
+        simulationMode: 'Strict',
+        principal: principalArn,
+        resourceArn: keyArn,
+        resourceAccount: accountId,
+        action: 'kms:Decrypt',
+        customContextKeys: {}
+      },
+      client
+    )
+
+    //Then both the principal and resource RCP hierarchies should be requested
+    expect(rcpHierarchySpy).toHaveBeenCalledTimes(2)
+  })
+
+  it('should include RCPs for a customer-managed KMS key and other KMS actions', async () => {
+    //Given a non-RetireGrant KMS request targeting a customer-managed key
+    const { store, client } = testStore()
+    await saveUser(store, { arn: principalArn })
+    await store.saveResourceMetadata(accountId, keyArn, 'metadata', { awsManaged: false })
+    const rcpHierarchySpy = vi.spyOn(client, 'getRcpHierarchyForAccount')
+
+    //When simulating the request
+    await simulateRequest(
+      {
+        simulationMode: 'Strict',
+        principal: principalArn,
+        resourceArn: keyArn,
+        resourceAccount: accountId,
+        action: 'kms:Decrypt',
+        customContextKeys: {}
+      },
+      client
+    )
+
+    //Then both the principal and resource RCP hierarchies should be requested
+    expect(rcpHierarchySpy).toHaveBeenCalledTimes(2)
+    expect(rcpHierarchySpy).toHaveBeenCalledWith(accountId)
   })
 })
 

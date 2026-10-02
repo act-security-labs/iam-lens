@@ -1,0 +1,6 @@
+{
+  "arn": "arn:aws:kms:us-east-1:400000000002:key/test-key-retire-grant",
+  "name": "test-key-retire-grant",
+  "region": "us-east-1",
+  "awsManaged": false
+}

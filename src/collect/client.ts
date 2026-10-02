@@ -42,6 +42,13 @@ interface ResourceMetadata {
 }
 
 /**
+ * Collected metadata that determines whether a KMS key is AWS-managed.
+ */
+interface KmsKeyMetadata {
+  awsManaged?: boolean
+}
+
+/**
  * Collected S3 Public Access Block configuration metadata for an account or bucket.
  */
 interface S3PublicAccessBlockMetadata {
@@ -1056,6 +1063,25 @@ export class IamCollectClient {
       return createValidatedPolicy(armSharePolicy.policy, validateResourcePolicy, {
         name: resourceArn
       })
+    })
+  }
+
+  /**
+   * Determines whether a KMS key is marked as AWS-managed in collected resource metadata.
+   *
+   * @param resourceArn the ARN of the KMS key
+   * @param accountId the ID of the account that owns the KMS key
+   * @returns true only when the key metadata explicitly sets `awsManaged` to true
+   */
+  async isAwsManagedKmsKey(resourceArn: string, accountId: string): Promise<boolean> {
+    const cacheKey = `kmsKeyAwsManaged:${accountId}:${resourceArn}`
+    return this.withCache(cacheKey, async () => {
+      const metadata = await this.storageClient.getResourceMetadata<KmsKeyMetadata, KmsKeyMetadata>(
+        accountId,
+        resourceArn,
+        'metadata'
+      )
+      return metadata?.awsManaged === true
     })
   }
 
