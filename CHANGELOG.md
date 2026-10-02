@@ -1,3 +1,5 @@
+## [0.1.163](https://github.com/act-security-labs/iam-lens/compare/v0.1.162...v0.1.163) (2026-10-02)
+
 ## [0.1.162](https://github.com/act-security-labs/iam-lens/compare/v0.1.161...v0.1.162) (2026-10-02)
 
 
