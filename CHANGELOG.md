@@ -1,3 +1,10 @@
+## [0.1.161](https://github.com/act-security-labs/iam-lens/compare/v0.1.160...v0.1.161) (2026-10-02)
+
+
+### Features
+
+* make caller simulation context authoritative ([c5195bc](https://github.com/act-security-labs/iam-lens/commit/c5195bc196401600fe8be927e9c9c239397ec6f9))
+
 ## [0.1.160](https://github.com/act-security-labs/iam-lens/compare/v0.1.159...v0.1.160) (2026-09-19)
 
 
