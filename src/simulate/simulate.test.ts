@@ -10,6 +10,89 @@ import {
 } from './simulate.js'
 
 describe('simulateRequest', () => {
+  it('should apply an RCP when assuming a service-linked role', async () => {
+    //Given a caller role, a service-linked target role, and an RCP on the target account
+    const { store, client } = testStore()
+    const callerAccountId = '123456789012'
+    const targetAccountId = '210987654321'
+    const callerRoleArn = `arn:aws:iam::${callerAccountId}:role/CallerRole`
+    const targetRoleArn = `arn:aws:iam::${targetAccountId}:role/aws-service-role/example.amazonaws.com/AWSServiceRoleForExample`
+    const orgId = 'o-exampleorg'
+
+    await saveRole(store, {
+      arn: callerRoleArn,
+      inlinePolicies: [
+        {
+          PolicyName: 'AllowAssumeRole',
+          PolicyDocument: {
+            Version: '2012-10-17',
+            Statement: {
+              Effect: 'Allow',
+              Action: 'sts:AssumeRole',
+              Resource: targetRoleArn
+            }
+          }
+        }
+      ]
+    })
+    await saveRole(store, {
+      arn: targetRoleArn,
+      trustPolicy: {
+        Version: '2012-10-17',
+        Statement: {
+          Effect: 'Allow',
+          Principal: { AWS: callerRoleArn },
+          Action: 'sts:AssumeRole'
+        }
+      }
+    })
+    await store.saveOrganizationMetadata(orgId, 'metadata', { rootAccountId: callerAccountId })
+    await store.saveIndex('accounts-to-orgs', { [targetAccountId]: orgId }, '')
+    await store.saveOrganizationMetadata(orgId, 'ous', { 'r-example': { rcps: [] } })
+    await store.saveOrganizationMetadata(orgId, 'accounts', {
+      [targetAccountId]: {
+        ou: 'r-example',
+        rcps: [
+          'arn:aws:organizations::123456789012:policy/o-exampleorg/resource_control_policy/p-deny-assume-role'
+        ]
+      }
+    })
+    await store.saveOrganizationPolicyMetadata(orgId, 'rcps', 'p-deny-assume-role', 'metadata', {
+      arn: 'arn:aws:organizations::123456789012:policy/o-exampleorg/resource_control_policy/p-deny-assume-role',
+      name: 'DenyAssumeRole'
+    })
+    await store.saveOrganizationPolicyMetadata(orgId, 'rcps', 'p-deny-assume-role', 'policy', {
+      Version: '2012-10-17',
+      Statement: {
+        Effect: 'Deny',
+        Principal: '*',
+        Action: 'sts:AssumeRole',
+        Resource: targetRoleArn
+      }
+    })
+
+    //When the non-SLR caller assumes the service-linked role
+    const { result } = await simulateRequest(
+      {
+        simulationMode: 'Strict',
+        principal: callerRoleArn,
+        resourceArn: targetRoleArn,
+        resourceAccount: targetAccountId,
+        action: 'sts:AssumeRole',
+        customContextKeys: {}
+      },
+      client
+    )
+
+    //Then the target account RCP explicitly denies the request
+    expect(result.resultType).toEqual('single')
+    if (result.resultType !== 'single') {
+      assert.fail(`Expected a single result, got ${result.resultType}`)
+    }
+    expect(result.overallResult).toEqual('ExplicitlyDenied')
+    expect(result.result.analysis.rcpAnalysis?.result).toEqual('ExplicitlyDenied')
+  })
+
   it('should throw an error if the resource account id cannot be determined', async () => {
     const { client } = testStore()
     // Given a request with an unknown resource ARN
