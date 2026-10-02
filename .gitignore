@@ -3,4 +3,5 @@ node_modules
 coverage
 .npmrc
 .vscode
+docs/plans/
 src/test-datasets/**/principal-index-*.json
