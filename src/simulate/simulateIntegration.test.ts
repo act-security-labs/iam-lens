@@ -122,6 +122,32 @@ const simulateIntegrationTest: {
     expected: 'ExplicitlyDenied'
   },
   {
+    name: 'AWS-managed KMS key ignores an otherwise applicable RCP deny',
+    data: '2',
+    request: {
+      resourceArn: 'arn:aws:kms:us-east-1:400000000002:key/test-key-aws-managed',
+      resourceAccount: undefined,
+      action: 'kms:Decrypt',
+      principal: 'arn:aws:iam::400000000002:role/kms-user',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'Allowed'
+  },
+  {
+    name: 'kms:RetireGrant ignores an otherwise applicable RCP deny',
+    data: '2',
+    request: {
+      resourceArn: 'arn:aws:kms:us-east-1:400000000002:key/test-key-retire-grant',
+      resourceAccount: undefined,
+      action: 'kms:RetireGrant',
+      principal: 'arn:aws:iam::400000000002:role/kms-user',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'Allowed'
+  },
+  {
     name: 'Wildcard blocked by SCP',
     data: '1',
     request: {

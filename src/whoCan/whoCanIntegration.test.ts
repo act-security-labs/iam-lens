@@ -2561,6 +2561,48 @@ const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
     }
   },
   {
+    name: 'AWS-managed KMS key ignores an otherwise applicable RCP deny',
+    description:
+      'The KMS key policy and identity policy allow kms-user, while a resource-account RCP explicitly denies the same request. AWS-managed KMS keys must omit the RCP, so whoCan returns the grant.',
+    data: '2',
+    request: {
+      resource: 'arn:aws:kms:us-east-1:400000000002:key/test-key-aws-managed',
+      actions: ['kms:Decrypt']
+    },
+    expected: {
+      who: [
+        {
+          action: 'Decrypt',
+          principal: 'arn:aws:iam::400000000002:role/kms-user',
+          service: 'kms',
+          level: 'write',
+          resourceType: 'key'
+        }
+      ]
+    }
+  },
+  {
+    name: 'kms:RetireGrant ignores an otherwise applicable RCP deny',
+    description:
+      'The customer-managed key, key policy, and identity policy allow kms-user, while a resource-account RCP explicitly denies the same request. kms:RetireGrant must omit the RCP, so whoCan returns the grant.',
+    data: '2',
+    request: {
+      resource: 'arn:aws:kms:us-east-1:400000000002:key/test-key-retire-grant',
+      actions: ['kms:RetireGrant']
+    },
+    expected: {
+      who: [
+        {
+          action: 'RetireGrant',
+          principal: 'arn:aws:iam::400000000002:role/kms-user',
+          service: 'kms',
+          level: 'permissions management, write',
+          resourceType: 'key'
+        }
+      ]
+    }
+  },
+  {
     name: 'KMS kms:CallerAccount positive — principals in matching account are allowed',
     simulationCounts: { withoutIndex: 26, withIndex: 2 },
     description:

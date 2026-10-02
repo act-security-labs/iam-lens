@@ -1,0 +1,6 @@
+{
+  "arn": "arn:aws:kms:us-east-1:400000000002:key/test-key-aws-managed",
+  "name": "test-key-aws-managed",
+  "region": "us-east-1",
+  "awsManaged": true
+}

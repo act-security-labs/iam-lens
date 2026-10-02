@@ -1,0 +1,14 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": ["kms:Decrypt", "kms:RetireGrant"],
+      "Resource": [
+        "arn:aws:kms:us-east-1:400000000002:key/test-key-aws-managed",
+        "arn:aws:kms:us-east-1:400000000002:key/test-key-retire-grant"
+      ]
+    }
+  ]
+}
