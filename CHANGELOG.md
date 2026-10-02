@@ -1,3 +1,12 @@
+## [0.1.162](https://github.com/act-security-labs/iam-lens/compare/v0.1.161...v0.1.162) (2026-10-02)
+
+
+### Features
+
+* exclude RCPs for AWS-managed KMS requests ([0657914](https://github.com/act-security-labs/iam-lens/commit/06579145bffbaf3825f294407034ed65e31f1c52))
+* ignore local plan documents ([c92b6a2](https://github.com/act-security-labs/iam-lens/commit/c92b6a2d45542289b22f634863a74bc0fc81f118))
+* ignore local plan documents ([fa86a0b](https://github.com/act-security-labs/iam-lens/commit/fa86a0be93530ffbbf8b1668f5a49642613b6d6d))
+
 ## [0.1.161](https://github.com/act-security-labs/iam-lens/compare/v0.1.160...v0.1.161) (2026-10-02)
 
 
