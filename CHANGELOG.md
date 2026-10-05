@@ -1,3 +1,10 @@
+## [0.1.164](https://github.com/act-security-labs/iam-lens/compare/v0.1.163...v0.1.164) (2026-10-05)
+
+
+### Features
+
+* add external simulation variants ([36d2acc](https://github.com/act-security-labs/iam-lens/commit/36d2acc28785a849490ffeef8fde5fb005f71644))
+
 ## [0.1.163](https://github.com/act-security-labs/iam-lens/compare/v0.1.162...v0.1.163) (2026-10-02)
 
 ## [0.1.162](https://github.com/act-security-labs/iam-lens/compare/v0.1.161...v0.1.162) (2026-10-02)
