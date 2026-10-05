@@ -1,0 +1,11 @@
+{
+  "r-ab12": {
+    "scps": ["arn:aws:organizations::aws:policy/service_control_policy/p-FullAWSAccess"],
+    "rcps": ["arn:aws:organizations::aws:policy/resource_control_policy/p-RCPFullAWSAccess"]
+  },
+  "ou-ab12-child1": {
+    "parent": "r-ab12",
+    "scps": ["arn:aws:organizations::aws:policy/service_control_policy/p-FullAWSAccess"],
+    "rcps": ["arn:aws:organizations::aws:policy/resource_control_policy/p-RCPFullAWSAccess"]
+  }
+}

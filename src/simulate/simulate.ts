@@ -728,9 +728,17 @@ async function getResourcePolicies(
     ? await getResourcePolicyForResource(collectClient, resourceArn, resourceAccount)
     : undefined
 
+  // AWS does not apply RCPs when a service principal assumes a service-linked role.
+  const servicePrincipalAssumesServiceLinkedRole =
+    principalArn !== undefined &&
+    resourceArn !== undefined &&
+    isServicePrincipal(principalArn) &&
+    isServiceLinkedRole(resourceArn)
+
   let resourceRcps: SimulationOrgPolicies[] = []
   if (
     resourceArn &&
+    !servicePrincipalAssumesServiceLinkedRole &&
     action.localeCompare(kmsRetireGrantAction, undefined, { sensitivity: 'base' }) !== 0
   ) {
     const resourceArnParts = splitArnParts(resourceArn)
