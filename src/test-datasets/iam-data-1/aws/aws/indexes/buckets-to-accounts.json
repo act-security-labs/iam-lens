@@ -74,5 +74,9 @@
   "source-arn-deny-bucket": {
     "accountId": "200000000002",
     "region": "us-west-2"
+  },
+  "anonymous-principal-org-conditions": {
+    "accountId": "200000000002",
+    "region": "us-west-2"
   }
 }

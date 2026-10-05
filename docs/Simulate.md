@@ -24,20 +24,68 @@ When simulating requests, iam-lens will detect the account for the principal and
 
 ## Options
 
-| Flag                                | Description                                                                                                                                                                                                                                                                                                             |
-| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--principal <arn>`                 | The principal the request is from. Can be a user, role, session, or AWS service.                                                                                                                                                                                                                                        |
-| `--resource <arn>`                  | The ARN of the resource to simulate access to. Ignore for wildcard-only actions such as `s3:ListAllMyBuckets`.                                                                                                                                                                                                          |
-| `--resource-account <id>`           | The account ID of the resource. Only required if it cannot be determined from the resource ARN or the principal ARN for wildcard only actions.                                                                                                                                                                          |
-| `--action <service:action>`         | The action to simulate; must be a valid IAM service and action such as `s3:ListBucket`.                                                                                                                                                                                                                                 |
-| `--context <key value1 value2>`     | One or more context keys to use for the simulation. Keys are formatted as `keyA value1 value2`. To specify multiple keys simply provide the argument more than once. For instance `--context keyA valueA1 valueA2 --context keyB valueB1 valueB2` See [Context Keys](#context-keys) for what keys are set automatically |
-| `-v`, `--verbose`                   | Enable verbose output for the simulation to see exactly what statements applied or not and why.                                                                                                                                                                                                                         |
-| `--expect <result>`                 | Optional expected outcome of the simulation. Valid values are `Allowed`, `ImplicitlyDenied`, `ExplicitlyDenied`, `AnyDeny`. If the result does not match the expected value, a non-zero exit code is returned                                                                                                           |
-| `-i`, `--ignore-missing-principal`  | Ignore if the principal is not found in the data. By default a simulation will fail if the principal is not in your iam-collect data. Use this flag if you want to simulate a request for a principal that may not exist in the downloaded data.                                                                        |
-| `--s3-abac-override`                | Override the S3 ABAC setting for S3 buckets. Defaults to the bucket setting stored in your iam-collect data. Valid values are `enabled` or `disabled`. S3 Block Public Access is detected automatically from collected bucket/account metadata.                                                                         |
-| `--session-policy <policy or file>` | A session policy to use for the simulation. Can be either a JSON policy document or a path to a file containing the policy. Only applies to principal types that support session policies (roles, role sessions, and federated users).                                                                                  |
+| Flag                                 | Description                                                                                                                                                                                                                                                                                                             |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--principal <arn>`                  | The principal the request is from. Can be a user, role, session, or AWS service.                                                                                                                                                                                                                                        |
+| `--resource <arn>`                   | The ARN of the resource to simulate access to. Normal simulations may omit it for wildcard-only actions such as `s3:ListAllMyBuckets`; simulation variants reject wildcard-only actions.                                                                                                                                |
+| `--resource-account <id>`            | The account ID of the resource. Required when it cannot be determined from the resource ARN. Normal wildcard-only simulations use the principal account.                                                                                                                                                                |
+| `--action <service:action>`          | The action to simulate; must be a valid IAM service and action such as `s3:ListBucket`.                                                                                                                                                                                                                                 |
+| `--context <key value1 value2>`      | One or more context keys to use for the simulation. Keys are formatted as `keyA value1 value2`. To specify multiple keys simply provide the argument more than once. For instance `--context keyA valueA1 valueA2 --context keyB valueB1 valueB2` See [Context Keys](#context-keys) for what keys are set automatically |
+| `-v`, `--verbose`                    | Enable verbose output for the simulation to see exactly what statements applied or not and why.                                                                                                                                                                                                                         |
+| `--expect <result>`                  | Optional expected outcome of the simulation. Valid values are `Allowed`, `ImplicitlyDenied`, `ExplicitlyDenied`, `AnyDeny`. If the result does not match the expected value, a non-zero exit code is returned                                                                                                           |
+| `-a`, `--anonymous`                  | Simulate an unsigned request. Requires a concrete resource ARN, does not support wildcard-only actions, and cannot be combined with `--principal` or `--session-policy`.                                                                                                                                                |
+| `-e`, `--external-principal`         | Simulate a principal outside the dataset with a synthetic allow-all identity policy and no SCPs. Collected resource policies, RCPs, VPC endpoint policies, and S3 settings still apply. Wildcard-only actions are unsupported.                                                                                          |
+| `-x`, `--external-resource`          | Simulate a concrete resource ARN outside the dataset. Collected principal policies and SCPs apply; RCPs do not. The resource/trust policy defaults to allow-all. Wildcard-only actions are unsupported.                                                                                                                 |
+| `--resource-policy <policy or file>` | Optional resource policy for `--external-resource`, or trust policy for an STS assume-role action. Accepts JSON or a file path.                                                                                                                                                                                         |
+| `--s3-abac-override`                 | Override the S3 ABAC setting for S3 buckets. Valid values are `enabled` or `disabled`. Normal, anonymous, and external-principal simulations default to collected metadata. External-resource simulations default ABAC and Block Public Access to disabled.                                                             |
+| `--session-policy <policy or file>`  | A session policy to use for the simulation. Can be either a JSON policy document or a path to a file containing the policy. Only applies to principal types that support session policies (roles, role sessions, and federated users).                                                                                  |
 
 You can also include any [Global CLI Options](GlobalCliOptions.md).
+
+## Simulation Variants
+
+### Anonymous requests
+
+Use `--anonymous` to evaluate unsigned access to a concrete resource ARN. Anonymous requests have no identity policy, session policy, permission boundary, or SCP, and principal-derived context keys such as `aws:PrincipalArn` and `aws:PrincipalTag/team` cannot be supplied. The resource does not need to exist in the collected dataset, but `--resource-account` is required when its account cannot be inferred from the ARN or collected indexes. When available, collected resource policies, RCPs, VPC endpoint policies, and S3 ABAC/Block Public Access settings still apply. Wildcard-only actions are unsupported.
+
+```bash
+iam-lens simulate \
+  --anonymous \
+  --resource arn:aws:s3:::public-bucket/report.txt \
+  --action s3:GetObject
+```
+
+### External principals
+
+Use `--external-principal` primarily when the principal's account is outside the collected dataset and organization. This mode assumes the principal has an allow-all identity policy, has no permission boundary, and is not subject to SCPs. A supplied session policy can still restrict the request. Resource policies, RCPs, VPC endpoint policies, and collected S3 settings apply normally. Wildcard-only actions are unsupported.
+
+```bash
+iam-lens simulate \
+  --external-principal \
+  --principal arn:aws:iam::999999999999:role/ExternalRole \
+  --resource arn:aws:s3:::example-bucket/report.txt \
+  --action s3:GetObject
+```
+
+The former `--ignore-missing-principal` option has been removed. Use this explicit mode instead, noting that it assumes an allow-all identity policy and no SCPs.
+
+### External resources
+
+Use `--external-resource` with a concrete resource ARN when the target resource's account is outside the collected dataset. This mode keeps the collected principal's identity policies, permission boundary, session policy, and SCPs. It applies no RCPs and defaults to an allow-all resource policy for the requested ARN. STS assume-role actions receive an allow-all trust policy instead. Supply `--resource-policy` to replace that default; for STS assume-role actions, the document must be a trust policy. Wildcard-only actions are unsupported.
+
+```bash
+iam-lens simulate \
+  --external-resource \
+  --principal arn:aws:iam::123456789012:role/ExampleRole \
+  --resource arn:aws:s3:::external-bucket/report.txt \
+  --resource-account 999999999999 \
+  --action s3:GetObject \
+  --resource-policy ./external-bucket-policy.json
+```
+
+External-resource S3 simulations do not load bucket ABAC or Block Public Access metadata. Both default to disabled; `--s3-abac-override enabled` can explicitly enable S3 ABAC evaluation.
+
+The three variant flags are mutually exclusive. Anonymous and external-resource simulations require `--resource`. `--resource-policy` is valid only with `--external-resource`.
 
 ## Using VPC Endpoint Policies
 

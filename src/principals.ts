@@ -97,6 +97,7 @@ export async function getAllPoliciesForRole(
  *
  * IAM role and assumed-role principals are resolved to their canonical stored ARN before
  * loading policies so pathless STS session principals can use path-qualified IAM role data.
+ * SCPs are omitted for service-linked roles because they are not subject to SCP enforcement.
  *
  * @param collectClient the IAM collect client to use for retrieving policies
  * @param principalArn the ARN or service principal to get policies for
@@ -125,12 +126,14 @@ export async function getAllPoliciesForPrincipal(
     return getAllPoliciesForUser(collectClient, principalArn)
   } else if (isIamRoleArn(principalArn)) {
     const roleArn = (await collectClient.resolvePrincipalArn(principalArn)) ?? principalArn
-    return getAllPoliciesForRole(collectClient, roleArn)
+    const policies = await getAllPoliciesForRole(collectClient, roleArn)
+    return isServiceLinkedRole(roleArn) ? { ...policies, scps: [] } : policies
   } else if (isAssumedRoleArn(principalArn)) {
     const roleArn =
       (await collectClient.resolvePrincipalArn(principalArn)) ??
       convertAssumedRoleArnToRoleArn(principalArn)
-    return getAllPoliciesForRole(collectClient, roleArn)
+    const policies = await getAllPoliciesForRole(collectClient, roleArn)
+    return isServiceLinkedRole(roleArn) ? { ...policies, scps: [] } : policies
   }
   throw new Error(`Unsupported principal type: ${principalArn}`)
 }

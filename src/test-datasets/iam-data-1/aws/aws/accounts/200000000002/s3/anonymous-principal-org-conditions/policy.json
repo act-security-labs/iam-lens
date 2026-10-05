@@ -1,0 +1,48 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowAnonymousPrincipalOrgConditionTests",
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": ["s3:GetObject"],
+      "Resource": ["arn:aws:s3:::anonymous-principal-org-conditions/*"]
+    },
+    {
+      "Sid": "DenyMatchingPrincipalOrg",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": ["s3:GetObject"],
+      "Resource": ["arn:aws:s3:::anonymous-principal-org-conditions/string-equals"],
+      "Condition": {
+        "StringEquals": {
+          "aws:PrincipalOrgId": "o-22222222"
+        }
+      }
+    },
+    {
+      "Sid": "DenyMatchingPrincipalOrgIfExists",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": ["s3:GetObject"],
+      "Resource": ["arn:aws:s3:::anonymous-principal-org-conditions/string-equals-if-exists"],
+      "Condition": {
+        "StringEqualsIfExists": {
+          "aws:PrincipalOrgId": "o-22222222"
+        }
+      }
+    },
+    {
+      "Sid": "DenyOutsidePrincipalOrg",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": ["s3:GetObject"],
+      "Resource": ["arn:aws:s3:::anonymous-principal-org-conditions/string-not-equals"],
+      "Condition": {
+        "StringNotEquals": {
+          "aws:PrincipalOrgId": "o-22222222"
+        }
+      }
+    }
+  ]
+}

@@ -181,6 +181,26 @@ const principalCanIntegrationTests: {
         },
         {
           Effect: 'Deny',
+          Action: 's3:GetObject',
+          Condition: {
+            stringequals: {
+              'aws:principalorgid': ['o-22222222']
+            }
+          },
+          Resource: ['arn:aws:s3:::anonymous-principal-org-conditions/string-equals']
+        },
+        {
+          Effect: 'Deny',
+          Action: 's3:GetObject',
+          Condition: {
+            stringequalsifexists: {
+              'aws:principalorgid': ['o-22222222']
+            }
+          },
+          Resource: ['arn:aws:s3:::anonymous-principal-org-conditions/string-equals-if-exists']
+        },
+        {
+          Effect: 'Deny',
           Action: 's3:PutObject',
           Condition: {
             arnnotequals: {

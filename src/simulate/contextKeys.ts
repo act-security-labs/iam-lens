@@ -7,7 +7,7 @@ import {
 } from '@actsecurity/iam-utils'
 import { IamCollectClient } from '../collect/client.js'
 import { isArnPrincipal, isServicePrincipal } from '../principals.js'
-import { type SimulationRequest } from './simulate.js'
+import type { InternalSimulationRequest } from './simulate.js'
 
 /**
  * Context keys for IAM simulation requests.
@@ -17,6 +17,16 @@ import { type SimulationRequest } from './simulate.js'
  * context keys that may be required for the simulation.
  */
 export type ContextKeys = Record<string, string | string[]>
+
+/**
+ * Controls optional collected metadata lookups while deriving context keys.
+ */
+export interface CreateContextKeysOptions {
+  /**
+   * Whether resource tags and presence should be loaded from collected data.
+   */
+  includeResourceMetadata?: boolean
+}
 
 /**
  * Placeholder for the caller account AWS supplies on a service-mediated KMS request.
@@ -63,6 +73,37 @@ export const CONTEXT_KEYS = {
   vpcArn: 'aws:SourceVpcArn'
 }
 
+const anonymousPrincipalContextKeys = new Set([
+  'aws:assumedroot',
+  'aws:ec2instancesourceprivateipv4',
+  'aws:ec2instancesourcevpc',
+  'aws:federatedprovider',
+  'aws:multifactorauthage',
+  'aws:multifactorauthpresent',
+  'aws:sourceidentity',
+  'aws:tokenissuetime',
+  'aws:username',
+  'aws:userid',
+  'kms:calleraccount'
+])
+
+/**
+ * Determine whether a context key requires an authenticated principal or its credentials.
+ *
+ * Anonymous requests cannot supply these keys as overrides because AWS treats the corresponding
+ * principal identity as absent. Principal-prefixed keys include fixed keys such as
+ * `aws:PrincipalArn` and dynamic keys such as `aws:PrincipalTag/team`.
+ *
+ * @param key context key name to classify
+ * @returns whether the key is unavailable to anonymous requests
+ */
+export function isAnonymousPrincipalContextKey(key: string): boolean {
+  const normalizedKey = key.toLowerCase()
+  return (
+    normalizedKey.startsWith('aws:principal') || anonymousPrincipalContextKeys.has(normalizedKey)
+  )
+}
+
 /**
  * Checks if a context has a specific key (case-insensitive).
  *
@@ -96,14 +137,16 @@ export function contextValue(context: ContextKeys, key: string): string | string
  * @param service the service the request is for
  * @param contextKeyOverrides the context key overrides to apply
  * @param resolvedPrincipalArnForContext canonical principal ARN to use for role-backed context keys
+ * @param options controls collected resource metadata lookups
  * @returns a promise that resolves to the context keys for the simulation request
  */
 export async function createContextKeys(
   collectClient: IamCollectClient,
-  simulationRequest: SimulationRequest,
+  simulationRequest: InternalSimulationRequest,
   service: string,
   contextKeyOverrides: ContextKeys,
-  resolvedPrincipalArnForContext?: string
+  resolvedPrincipalArnForContext?: string,
+  options: CreateContextKeysOptions = {}
 ): Promise<{ resourceTagsAreKnown: boolean; contextKeys: ContextKeys }> {
   const contextKeys: ContextKeys = {
     'aws:SecureTransport': 'true',
@@ -111,13 +154,14 @@ export async function createContextKeys(
     'aws:EpochTime': Math.floor(Date.now() / 1000).toString()
   }
 
-  if (isArnPrincipal(simulationRequest.principal)) {
-    const arnParts = splitArnParts(simulationRequest.principal)
+  const principal = simulationRequest.principal
+  if (principal && isArnPrincipal(principal)) {
+    const arnParts = splitArnParts(principal)
     const principalArnForContext =
       resolvedPrincipalArnForContext ??
       (arnParts.resourceType === 'assumed-role'
-        ? convertAssumedRoleArnToRoleArn(simulationRequest.principal)
-        : simulationRequest.principal)
+        ? convertAssumedRoleArnToRoleArn(principal)
+        : principal)
     contextKeys['aws:PrincipalArn'] = principalArnForContext
     const principalAccountId = arnParts.accountId!
     contextKeys['aws:PrincipalAccount'] = arnParts.accountId || ''
@@ -145,14 +189,12 @@ export async function createContextKeys(
       contextKeys['kms:CallerAccount'] = principalAccountId
     }
 
-    if (simulationRequest.principal.endsWith(':root')) {
+    if (principal.endsWith(':root')) {
       contextKeys['aws:PrincipalType'] = 'Account'
       contextKeys['aws:userid'] = principalAccountId
     } else if (arnParts.resourceType === 'user') {
       contextKeys['aws:PrincipalType'] = 'User'
-      const userUniqueId = await collectClient.getUniqueIdForIamResource(
-        simulationRequest.principal
-      )
+      const userUniqueId = await collectClient.getUniqueIdForIamResource(principal)
       contextKeys['aws:userid'] = userUniqueId || 'UNKNOWN'
       const userName = arnParts.resourcePath?.split('/').at(-1)!
       contextKeys['aws:username'] = userName
@@ -165,7 +207,7 @@ export async function createContextKeys(
       //TODO: Set aws:userId for role principals
       if (arnParts.resourceType === 'assumed-role') {
         const sessionName = arnParts.resourcePath?.split('/').at(-1)!
-        const roleArn = convertAssumedRoleArnToRoleArn(simulationRequest.principal)
+        const roleArn = convertAssumedRoleArnToRoleArn(principal)
         const roleUniqueId = await collectClient.getUniqueIdForIamResource(roleArn)
         contextKeys['aws:userid'] = `${roleUniqueId || 'UNKNOWN'}:${sessionName}`
       }
@@ -189,7 +231,7 @@ export async function createContextKeys(
   }
 
   let resourceTagsAreKnown = false
-  if (simulationRequest.resourceArn) {
+  if (simulationRequest.resourceArn && options.includeResourceMetadata !== false) {
     const isBucket = isS3BucketOrObjectArn(simulationRequest.resourceArn)
     const { tags: resourceTags, present: resourceTagsPreset } =
       await collectClient.getTagsForResource(
@@ -206,9 +248,9 @@ export async function createContextKeys(
   }
 
   //Service Principal context keys
-  if (isServicePrincipal(simulationRequest.principal)) {
+  if (principal && isServicePrincipal(principal)) {
     contextKeys['aws:PrincipalIsAWSService'] = 'true'
-    contextKeys['aws:PrincipalServiceName'] = simulationRequest.principal
+    contextKeys['aws:PrincipalServiceName'] = principal
     contextKeys['aws:SourceAccount'] = simulationRequest.resourceAccount!
     contextKeys['aws:SourceOwner'] = simulationRequest.resourceAccount!
     contextKeys['aws:SourceOrgID'] = contextKeys['aws:ResourceOrgID']
