@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { testStore } from './collect/inMemoryClient.js'
 import { getAllPoliciesForPrincipal, isServiceLinkedRole } from './principals.js'
 import { saveRole } from './utils/testUtils.js'
@@ -40,6 +40,23 @@ describe('isServiceLinkedRole', () => {
 })
 
 describe('getAllPoliciesForPrincipal', () => {
+  it('should omit SCPs for a service-linked role', async () => {
+    //Given a service-linked role in an account with an SCP hierarchy
+    const { store, client } = testStore()
+    const serviceLinkedRoleArn =
+      'arn:aws:iam::123456789012:role/aws-service-role/example.amazonaws.com/AWSServiceRoleForExample'
+    await saveRole(store, { arn: serviceLinkedRoleArn })
+    vi.spyOn(client, 'getScpHierarchyForAccount').mockResolvedValue([
+      { orgIdentifier: 'o-example', policies: [] }
+    ])
+
+    //When loading all policies for the service-linked role
+    const policies = await getAllPoliciesForPrincipal(client, serviceLinkedRoleArn)
+
+    //Then SCPs should be excluded from the applicable principal policies
+    expect(policies.scps).toEqual([])
+  })
+
   it('should load policies from a path-qualified role for a pathless assumed-role ARN', async () => {
     //Given a path-qualified role and an assumed-role session ARN that omits the IAM role path
     const { store, client } = testStore()

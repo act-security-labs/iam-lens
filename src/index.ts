@@ -22,7 +22,16 @@ export {
 export { principalCan, type PrincipalCanInput } from './principalCan/principalCan.js'
 export { makePrincipalIndex } from './principalIndex/makePrincipalIndex.js'
 export type { ContextKeys } from './simulate/contextKeys.js'
-export { simulateRequest, type SimulationRequest } from './simulate/simulate.js'
+export {
+  simulateRequest,
+  simulateAnonymousRequest,
+  simulateExternalPrincipalRequest,
+  simulateExternalResourceRequest,
+  type SimulationRequest,
+  type AnonymousSimulationRequest,
+  type ExternalResourceSimulationRequest,
+  type SimulateRequestResult
+} from './simulate/simulate.js'
 export {
   whoCan,
   type WhoCanPrincipalScope,

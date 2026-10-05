@@ -111,6 +111,43 @@ describe('simulateRequest', () => {
     )
   })
 
+  it('should not mutate the caller request when deriving the resource account', async () => {
+    //Given a collected user request whose resource account is derived from the ARN
+    const { store, client } = testStore()
+    const principal = 'arn:aws:iam::123456789012:user/test-user'
+    await saveUser(store, {
+      arn: principal,
+      inlinePolicies: [
+        {
+          PolicyName: 'ReadTable',
+          PolicyDocument: {
+            Version: '2012-10-17',
+            Statement: {
+              Effect: 'Allow',
+              Action: 'dynamodb:GetItem',
+              Resource: '*'
+            }
+          }
+        }
+      ]
+    })
+    const request: SimulationRequest = {
+      simulationMode: 'Strict',
+      principal,
+      resourceArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/example',
+      resourceAccount: undefined,
+      action: 'dynamodb:GetItem',
+      customContextKeys: {}
+    }
+
+    //When simulating the request
+    const response = await simulateRequest(request, client)
+
+    //Then the normalized output should have the account without mutating the caller input
+    expect(response.request.resource.accountId).toBe('123456789012')
+    expect(request.resourceAccount).toBeUndefined()
+  })
+
   it('should throw an error if the action service cannot be found', async () => {
     const { client } = testStore()
     // Given a request with an unknown action service
@@ -514,8 +551,7 @@ describe('aws:userid strict context key behavior', () => {
         resourceArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/my-table',
         resourceAccount: '123456789012',
         action: 'dynamodb:GetItem',
-        customContextKeys: {},
-        ignoreMissingPrincipal: true
+        customContextKeys: {}
       },
       client
     )
@@ -543,8 +579,7 @@ describe('aws:userid strict context key behavior', () => {
         resourceArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/my-table',
         resourceAccount: '123456789012',
         action: 'dynamodb:GetItem',
-        customContextKeys: {},
-        ignoreMissingPrincipal: true
+        customContextKeys: {}
       },
       client
     )
@@ -572,8 +607,7 @@ describe('aws:userid strict context key behavior', () => {
         resourceArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/my-table',
         resourceAccount: '123456789012',
         action: 'dynamodb:GetItem',
-        customContextKeys: {},
-        ignoreMissingPrincipal: true
+        customContextKeys: {}
       },
       client
     )
@@ -634,6 +668,57 @@ describe('caller-provided Discovery context keys', () => {
       assert.fail(`Simulation resulted in error: ${result.errors.message}`)
     }
     expect(result.overallResult).toBe('ImplicitlyDenied')
+  })
+
+  it('should treat strict keys as authoritatively absent for anonymous requests', () => {
+    //Given an anonymous Discovery request without principal or service-source context
+    const request = {
+      simulationMode: 'Discovery' as const,
+      principal: undefined,
+      customContextKeys: {}
+    }
+
+    //When resolving constraints for context keys that anonymous requests cannot supply
+    const constraints = [
+      'aws:PrincipalArn',
+      'aws:PrincipalAccount',
+      'aws:PrincipalOrgPaths',
+      'aws:PrincipalOrgID',
+      'aws:PrincipalIsAWSService',
+      'aws:PrincipalServiceName',
+      'aws:username',
+      'aws:userid',
+      'aws:SourceArn',
+      'kms:CallerAccount',
+      '/^aws:PrincipalTag\/.*/'
+    ].map((keyName) => discoveryConstraintForStrictKey(keyName, request))
+
+    //Then their absence and values should be authoritative
+    expect(constraints).toEqual([
+      { keyName: 'aws:PrincipalArn', presenceIsKnown: true, valueIsKnown: true },
+      { keyName: 'aws:PrincipalAccount', presenceIsKnown: true, valueIsKnown: true },
+      { keyName: 'aws:PrincipalOrgPaths', presenceIsKnown: true, valueIsKnown: true },
+      { keyName: 'aws:PrincipalOrgID', presenceIsKnown: true, valueIsKnown: true },
+      {
+        keyName: 'aws:PrincipalIsAWSService',
+        presenceIsKnown: true,
+        valueIsKnown: true
+      },
+      {
+        keyName: 'aws:PrincipalServiceName',
+        presenceIsKnown: true,
+        valueIsKnown: true
+      },
+      { keyName: 'aws:username', presenceIsKnown: true, valueIsKnown: true },
+      { keyName: 'aws:userid', presenceIsKnown: true, valueIsKnown: true },
+      { keyName: 'aws:SourceArn', presenceIsKnown: true, valueIsKnown: true },
+      { keyName: 'kms:CallerAccount', presenceIsKnown: true, valueIsKnown: true },
+      {
+        keyName: '/^aws:PrincipalTag\/.*/',
+        presenceIsKnown: true,
+        valueIsKnown: true
+      }
+    ])
   })
 
   it('should treat a caller-provided KMS caller account as known', () => {

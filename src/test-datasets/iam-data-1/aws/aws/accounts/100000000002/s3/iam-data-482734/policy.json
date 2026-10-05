@@ -33,6 +33,15 @@
       },
       "Action": ["s3:ListBucket", "s3:GetObject", "s3:DeleteObject", "s3:PutObject"],
       "Resource": ["arn:aws:s3:::iam-data-482734/iam-data/*", "arn:aws:s3:::iam-data-482734"]
+    },
+    {
+      "Sid": "ExternalPrincipalSimulationAccess",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::999999999999:role/ExternalAdministrator"
+      },
+      "Action": ["s3:GetBucketPolicy", "s3:PutBucketPolicy"],
+      "Resource": ["arn:aws:s3:::iam-data-482734"]
     }
   ]
 }

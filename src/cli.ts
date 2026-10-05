@@ -12,7 +12,14 @@ import { NoCacheProvider } from './collect/client.js'
 import { getCollectClient, loadCollectConfigs } from './collect/collect.js'
 import { principalCan } from './principalCan/principalCan.js'
 import { makePrincipalIndex } from './principalIndex/makePrincipalIndex.js'
-import { resultMatchesExpectation, simulateRequest } from './simulate/simulate.js'
+import { selectSimulateCliVariant } from './simulate/cliVariant.js'
+import {
+  resultMatchesExpectation,
+  simulateAnonymousRequest,
+  simulateExternalPrincipalRequest,
+  simulateExternalResourceRequest,
+  simulateRequest
+} from './simulate/simulate.js'
 import { iamLensVersion } from './utils/packageVersion.js'
 import { stringOrFileArgument } from './utils/stringOrFileArgument.js'
 import { whoCan } from './whoCan/whoCan.js'
@@ -53,10 +60,24 @@ const main = async () => {
               'The expected result of the simulation, if the result does not match the expected response a non-zero exit code will be returned',
             validValues: ['Allowed', 'ImplicitlyDenied', 'ExplicitlyDenied', 'AnyDeny']
           }),
-          ignoreMissingPrincipal: booleanArgument({
+          anonymous: booleanArgument({
             description:
-              'Ignore if the principal does not exist. Useful for simulating actions from principals that may not exist or are outside your data set',
-            character: 'i'
+              'Simulate an unsigned request to a concrete resource ARN. Wildcard-only actions are unsupported; cannot be combined with --principal or --session-policy',
+            character: 'a'
+          }),
+          externalPrincipal: booleanArgument({
+            description:
+              'Simulate an uncollected principal with an allow-all identity policy and no SCPs. Wildcard-only actions are unsupported',
+            character: 'e'
+          }),
+          externalResource: booleanArgument({
+            description:
+              'Simulate a concrete resource ARN outside the dataset with no RCPs and an allow-all resource or trust policy. Wildcard-only actions are unsupported',
+            character: 'x'
+          }),
+          resourcePolicy: stringOrFileArgument({
+            description:
+              'Resource policy for --external-resource, or trust policy for an STS assume-role action'
           }),
           s3AbacOverride: enumArgument({
             description:
@@ -138,6 +159,23 @@ const main = async () => {
     }
   )
 
+  const simulateSelection =
+    cli.subcommand === 'simulate'
+      ? selectSimulateCliVariant({
+          anonymous: cli.args.anonymous,
+          externalPrincipal: cli.args.externalPrincipal,
+          externalResource: cli.args.externalResource,
+          principal: cli.args.principal,
+          resource: cli.args.resource,
+          resourceAccount: cli.args.resourceAccount,
+          action: cli.args.action,
+          customContextKeys: singularizeOneEntryArrays(cli.args.context),
+          sessionPolicy: cli.args.sessionPolicy,
+          resourcePolicy: cli.args.resourcePolicy,
+          s3AbacOverride: cli.args.s3AbacOverride
+        })
+      : undefined
+
   if (cli.args.collectConfigs.length === 0) {
     cli.args.collectConfigs.push('./iam-collect.jsonc')
   }
@@ -145,30 +183,15 @@ const main = async () => {
   const collectClient = await getCollectClient(collectConfigs, cli.args.partition)
 
   if (cli.subcommand === 'simulate') {
-    const {
-      principal,
-      resource,
-      resourceAccount,
-      action,
-      context,
-      ignoreMissingPrincipal,
-      sessionPolicy
-    } = cli.args
-
-    const { request, result } = await simulateRequest(
-      {
-        sessionPolicy,
-        principal: principal!,
-        resourceArn: resource,
-        resourceAccount: resourceAccount,
-        action: action!,
-        customContextKeys: singularizeOneEntryArrays(context),
-        simulationMode: 'Strict',
-        ignoreMissingPrincipal,
-        s3AbacOverride: cli.args.s3AbacOverride
-      },
-      collectClient
-    )
+    const selection = simulateSelection!
+    const { request, result } =
+      selection.variant === 'anonymous'
+        ? await simulateAnonymousRequest(selection.request, collectClient)
+        : selection.variant === 'externalPrincipal'
+          ? await simulateExternalPrincipalRequest(selection.request, collectClient)
+          : selection.variant === 'externalResource'
+            ? await simulateExternalResourceRequest(selection.request, collectClient)
+            : await simulateRequest(selection.request, collectClient)
 
     if (result.resultType === 'error') {
       console.error('Simulation Errors:')

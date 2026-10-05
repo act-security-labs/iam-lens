@@ -1,0 +1,5 @@
+{
+  "name": "anonymous-principal-org-conditions",
+  "region": "us-west-2",
+  "arn": "arn:aws:s3:::anonymous-principal-org-conditions"
+}

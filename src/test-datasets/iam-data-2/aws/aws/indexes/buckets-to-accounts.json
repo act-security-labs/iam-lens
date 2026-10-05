@@ -26,5 +26,9 @@
   "bucket-bpa-specific-principal-bucket": {
     "accountId": "500000000002",
     "region": "us-west-2"
+  },
+  "external-principal-tag-bucket": {
+    "accountId": "400000000002",
+    "region": "us-east-1"
   }
 }

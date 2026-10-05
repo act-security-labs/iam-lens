@@ -40,19 +40,24 @@ By default, iam-lens looks for `./iam-collect.jsonc` configuration file. Users c
 **Syntax**:
 
 ```bash
-iam-lens simulate --principal <arn> --action <service:action> [--resource <arn>] [options]
+iam-lens simulate --action <service:action> [--principal <arn>] [--resource <arn>] [options]
 ```
 
 **Key Options**:
 
-- `--principal <arn>`: The principal making the request (user, role, session, or AWS service)
-- `--action <service:action>`: The action to test (e.g., `s3:GetObject`)
-- `--resource <arn>`: The target resource (omit for wildcard actions like `s3:ListAllMyBuckets`)
-- `--resource-account <id>`: Required for wildcard actions or when resource account cannot be determined
-- `--context <key value1 value2>`: Add context keys for condition evaluation
+- `--principal <arn>`: The principal making the request (user, role, session, or AWS service). Required except for `--anonymous`.
+- `--action <service:action>`: The action to test (e.g., `s3:GetObject`).
+- `--resource <arn>`: The target resource. Normal simulations may omit it for wildcard-only actions; simulation variants reject wildcard-only actions.
+- `--resource-account <id>`: Required when the resource account cannot be determined. Normal wildcard-only simulations use the principal account.
+- `--context <key value1 value2>`: Add context keys for condition evaluation.
+- `--session-policy <JSON-or-file>`: Apply a session policy to a supported authenticated principal. Anonymous requests reject this option.
+- `--s3-abac-override <enabled|disabled>`: Override whether S3 resource and bucket tag condition keys participate in evaluation.
 - `--verbose`: Show detailed JSON analysis of how the result was determined, including which specific policies and statements allowed or denied the request. Also includes the context that was automatically populated in the request.
-- `--expect <result>`: Assert expected outcome (`Allowed`, `ImplicitlyDenied`, `ExplicitlyDenied`)
-- `--ignore-missing-principal`: Continue if principal not found in data
+- `--expect <result>`: Assert an expected outcome (`Allowed`, `ImplicitlyDenied`, `ExplicitlyDenied`, or `AnyDeny`).
+- `--anonymous`: Simulate an unsigned request against a concrete resource ARN; the resource need not be collected.
+- `--external-principal`: Simulate a principal from an uncollected account with an allow-all identity policy, no permission boundary, and no SCPs.
+- `--external-resource`: Simulate a concrete resource ARN in an uncollected account. Collected principal policies remain in effect; RCPs do not; a resource/trust policy defaults to allow-all.
+- `--resource-policy <JSON-or-file>`: Override the external resource policy, or trust policy for STS assume-role actions. Valid only with `--external-resource`.
 
 **Returns**:
 
@@ -206,13 +211,25 @@ The `simulate` command supports comprehensive condition evaluation:
 
 **VPC Endpoints**: Automatic VPC endpoint policy evaluation when VPC context is provided
 
+### Simulation Variants
+
+Use variants only when their assumptions match the question:
+
+- **Anonymous**: unsigned request to a concrete resource ARN. There are no identity, session, permission-boundary, or SCP inputs, and principal-derived context keys cannot be supplied. The resource need not be collected; provide `--resource-account` when its account cannot be inferred. Available resource policies, RCPs, VPC endpoint policies, and collected S3 ABAC/Block Public Access settings still apply.
+- **External principal**: use primarily for a principal whose account is outside the collected dataset and organization. The principal receives a synthetic allow-all identity policy and no permission boundary or SCP. Session policies and collected resource policies, RCPs, VPC endpoint policies, and S3 settings still apply, so cross-account access still requires an applicable resource-side grant. Discovery mode returns conditions for unknown principal attributes, such as principal tags, unless authoritative values are supplied with `--context`.
+- **External resource**: use for a concrete resource ARN whose account is outside the collected dataset. Collected identity policies, permission boundaries, session policies, SCPs, and VPC endpoint policies still apply. RCPs do not. A resource policy—or STS trust policy—defaults to allow-all and can be overridden. S3 ABAC and Block Public Access default to disabled because resource metadata is unavailable; `--s3-abac-override enabled` can enable ABAC.
+
+The three flags are mutually exclusive and all reject wildcard-only actions. Anonymous and external-resource requests require `--resource`; anonymous requests also reject principal/session-policy options and principal-derived context keys. `--resource-policy` is valid only with external-resource simulation. Normal simulation always requires the principal to exist in collected data; the removed `--ignore-missing-principal` option is not honored.
+
 ### Cross-Account Analysis
 
-iam-lens can analyze cross-account permissions when data is available:
+iam-lens can analyze cross-account permissions:
 
-- Requires iam-collect data from both source and target accounts
-- Evaluates cross-account resource policies
-- Considers organizational policies (SCPs/RCPs) across account boundaries
+- Normal simulation requires collected principal data and uses collected target-resource data when available.
+- External-principal mode can model an uncollected source account using explicit synthetic assumptions.
+- External-resource mode can model an uncollected target account using a supplied or synthetic resource/trust policy.
+- Cross-account authorization still requires the applicable identity-side and resource-side grants.
+- SCPs apply to collected principals; RCPs apply to collected resources except where the selected variant explicitly omits them.
 
 ### Policy Types Analyzed
 
@@ -301,14 +318,15 @@ Start with simple examples and add complexity:
 
 - Check if principal exists in collected data
 - Verify ARN format and account ID
-- Consider using `--ignore-missing-principal` for hypothetical scenarios
+- For a hypothetical or external principal, use `--external-principal`
+- Explain that external-principal mode assumes an allow-all identity policy, no permission boundary, and no SCPs; it is not merely an error-suppression option
 
 **Unexpected Results**:
 
 - Use `--verbose` to see detailed JSON analysis showing exactly which policies and statements were evaluated
 - Check what context variables are automatically populated (visible in verbose output)
 - Check for typos in ARNs and action names
-- Verify resource-account specification for wildcard actions
+- For normal wildcard-only actions, verify that the principal ARN contains the intended account; simulation variants reject wildcard-only actions
 - If `who-can` shows unexpected access, use `simulate --verbose` to understand the exact policy logic
 
 **Performance Issues**:

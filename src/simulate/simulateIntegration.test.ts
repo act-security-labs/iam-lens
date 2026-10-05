@@ -579,10 +579,10 @@ describe('simulatePrincipalDoesNotExist', () => {
     )
   })
 
-  it('should not throw an error if ignoreMissingPrincipal is true', async () => {
-    // Given a request with a non-existent principal and ignoreMissingPrincipal set to true
+  it('should throw an error if the removed ignoreMissingPrincipal option is true', async () => {
+    //Given a request with a non-existent principal and the removed legacy option
     const collectClient = await getTestDatasetClient('1')
-    const request: SimulationRequest = {
+    const request: SimulationRequest & { ignoreMissingPrincipal: boolean } = {
       resourceArn: 'arn:aws:s3:::iam-data-482734',
       resourceAccount: undefined,
       action: 's3:GetBucketPolicy',
@@ -592,11 +592,13 @@ describe('simulatePrincipalDoesNotExist', () => {
       ignoreMissingPrincipal: true
     }
 
-    // When we run the simulation
-    const { result } = await simulateRequest(request, collectClient)
+    //When running the simulation with the legacy runtime property
+    const simulation = simulateRequest(request, collectClient)
 
-    // Then the result should not have errors
-    assertSuccessfulResult(result)
+    //Then the missing principal should still be rejected
+    await expect(simulation).rejects.toThrow(
+      new RegExp('Principal arn:aws:iam::100000000002:role/NonExistentRole does not exist.*')
+    )
   })
 })
 
