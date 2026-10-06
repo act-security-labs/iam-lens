@@ -1,0 +1,10 @@
+{
+  "r-ab12": {
+    "children": {
+      "ou-ab12-child1": {
+        "accounts": ["arn:aws:organizations::400000000001:account/o-44444444/400000000002"]
+      }
+    },
+    "accounts": ["arn:aws:organizations::400000000001:account/o-44444444/400000000001"]
+  }
+}

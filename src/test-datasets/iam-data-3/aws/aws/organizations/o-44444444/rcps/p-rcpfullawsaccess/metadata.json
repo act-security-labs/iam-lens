@@ -1,0 +1,6 @@
+{
+  "arn": "arn:aws:organizations::aws:policy/resource_control_policy/p-RCPFullAWSAccess",
+  "name": "RCPFullAWSAccess",
+  "description": "Allows access to every resource",
+  "awsManaged": true
+}

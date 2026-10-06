@@ -1,0 +1,6 @@
+{
+  "arn": "arn:aws:organizations::aws:policy/service_control_policy/p-FullAWSAccess",
+  "name": "FullAWSAccess",
+  "description": "Allows access to every operation",
+  "awsManaged": true
+}

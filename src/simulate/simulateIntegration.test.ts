@@ -148,6 +148,20 @@ const simulateIntegrationTest: {
     expected: 'Allowed'
   },
   {
+    name: 'service principal assuming a service-linked role ignores an otherwise applicable RCP deny',
+    data: '3',
+    request: {
+      resourceArn:
+        'arn:aws:iam::400000000002:role/aws-service-role/example.amazonaws.com/AWSServiceRoleForExample',
+      resourceAccount: undefined,
+      action: 'sts:AssumeRole',
+      principal: 'example.amazonaws.com',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'Allowed'
+  },
+  {
     name: 'Wildcard blocked by SCP',
     data: '1',
     request: {

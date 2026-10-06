@@ -1,0 +1,7 @@
+{
+  "arn": "arn:aws:iam::400000000002:role/aws-service-role/example.amazonaws.com/AWSServiceRoleForExample",
+  "name": "AWSServiceRoleForExample",
+  "id": "AROA0000SLREXAMPLE001",
+  "path": "/aws-service-role/example.amazonaws.com/",
+  "created": "2025-01-01T00:00:00.000Z"
+}

@@ -1,0 +1,6 @@
+{
+  "arn": "arn:aws:organizations::aws:policy/resource_control_policy/p-kms-rcp-deny",
+  "name": "KmsRcpDeny",
+  "description": "Denies access to integration-test KMS keys",
+  "awsManaged": false
+}
