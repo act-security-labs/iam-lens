@@ -1,3 +1,10 @@
+## [0.1.165](https://github.com/act-security-labs/iam-lens/compare/v0.1.164...v0.1.165) (2026-10-06)
+
+
+### Bug Fixes
+
+* skip RCPs for service-linked role assumptions ([#215](https://github.com/act-security-labs/iam-lens/issues/215)) ([970947d](https://github.com/act-security-labs/iam-lens/commit/970947d34a268f050752007879590a82fbfe2dad))
+
 ## [0.1.164](https://github.com/act-security-labs/iam-lens/compare/v0.1.163...v0.1.164) (2026-10-05)
 
 
