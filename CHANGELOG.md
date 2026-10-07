@@ -1,3 +1,10 @@
+## [0.1.166](https://github.com/act-security-labs/iam-lens/compare/v0.1.165...v0.1.166) (2026-10-07)
+
+
+### Features
+
+* simulate virtual principals ([#217](https://github.com/act-security-labs/iam-lens/issues/217)) ([e67ae08](https://github.com/act-security-labs/iam-lens/commit/e67ae0813c2989ae873a6e89610f73a02bd828be))
+
 ## [0.1.165](https://github.com/act-security-labs/iam-lens/compare/v0.1.164...v0.1.165) (2026-10-06)
 
 
