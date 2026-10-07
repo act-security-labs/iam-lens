@@ -26,9 +26,11 @@ export {
   simulateRequest,
   simulateAnonymousRequest,
   simulateExternalPrincipalRequest,
+  simulateVirtualPrincipal,
   simulateExternalResourceRequest,
   type SimulationRequest,
   type AnonymousSimulationRequest,
+  type VirtualPrincipalSimulationRequest,
   type ExternalResourceSimulationRequest,
   type SimulateRequestResult
 } from './simulate/simulate.js'

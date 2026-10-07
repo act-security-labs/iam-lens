@@ -4,7 +4,8 @@ import type {
   AnonymousSimulationRequest,
   ExternalResourceSimulationRequest,
   SimulateRequestResult,
-  SimulationRequest
+  SimulationRequest,
+  VirtualPrincipalSimulationRequest
 } from './simulate.js'
 
 describe('simulation request type contracts', () => {
@@ -21,6 +22,13 @@ describe('simulation request type contracts', () => {
     expectTypeOf<AnonymousSimulationRequest>().not.toHaveProperty('principal')
     expectTypeOf<AnonymousSimulationRequest>().not.toHaveProperty('sessionPolicy')
     expectTypeOf<AnonymousSimulationRequest['resourceArn']>().toEqualTypeOf<string>()
+  })
+
+  it('should keep a virtual principal required and accept an optional raw inline policy', () => {
+    expectTypeOf<VirtualPrincipalSimulationRequest['principal']>().toEqualTypeOf<string>()
+    expectTypeOf<VirtualPrincipalSimulationRequest['inlinePolicy']>().toEqualTypeOf<
+      Record<string, unknown> | undefined
+    >()
   })
 
   it('should require a concrete ARN and accept an optional raw object policy for external resources', () => {

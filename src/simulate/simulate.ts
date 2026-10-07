@@ -109,6 +109,19 @@ export interface AnonymousSimulationRequest extends Omit<
 }
 
 /**
+ * A simulation request for a principal ARN that is not collected as an IAM identity.
+ *
+ * The principal's captured organization policy hierarchies still apply. Its identity policies
+ * and permission boundary are replaced by one synthetic allow-all policy or `inlinePolicy`.
+ */
+export interface VirtualPrincipalSimulationRequest extends SimulationRequest {
+  /**
+   * Raw inline identity policy that replaces the default synthetic allow-all policy.
+   */
+  inlinePolicy?: Record<string, unknown>
+}
+
+/**
  * A simulation request targeting a resource that is not expected to exist in the collected dataset.
  */
 export interface ExternalResourceSimulationRequest extends Omit<SimulationRequest, 'resourceArn'> {
@@ -142,7 +155,8 @@ export interface SimulateRequestResult {
 /**
  * Identifies which collected or synthetic policy sources apply to a simulation.
  */
-type SimulationVariant = 'normal' | 'anonymous' | 'externalPrincipal' | 'externalResource'
+type SimulationVariant =
+  'normal' | 'anonymous' | 'externalPrincipal' | 'virtualPrincipal' | 'externalResource'
 
 /**
  * Normalized request shape shared by authenticated and anonymous orchestration.
@@ -152,6 +166,11 @@ export type InternalSimulationRequest = Omit<SimulationRequest, 'principal'> & {
    * Authenticated principal string, or undefined for an anonymous request.
    */
   principal: string | undefined
+
+  /**
+   * Caller-supplied inline identity policy for a virtual principal.
+   */
+  inlinePolicy?: Record<string, unknown>
 
   /**
    * Caller-supplied external resource or trust policy.
@@ -248,6 +267,24 @@ export async function simulateExternalPrincipalRequest(
 }
 
 /**
+ * Simulate an uncollected IAM principal while applying organization controls for its account.
+ *
+ * The principal receives a synthetic allow-all identity policy unless `inlinePolicy` replaces it.
+ * Permission boundaries and collected identity policies do not apply; supplied session policies still
+ * constrain the request.
+ *
+ * @param simulationRequest the virtual principal request details
+ * @param collectClient the IAM collect client to use for organization and resource-side data access
+ * @returns the normalized request and simulation result
+ */
+export async function simulateVirtualPrincipal(
+  simulationRequest: VirtualPrincipalSimulationRequest,
+  collectClient: IamCollectClient
+): Promise<SimulateRequestResult> {
+  return simulateRequestInternal({ ...simulationRequest }, 'virtualPrincipal', collectClient)
+}
+
+/**
  * Simulate a collected principal accessing a resource outside the collected dataset.
  * Wildcard-only actions are unsupported.
  *
@@ -295,7 +332,14 @@ async function simulateRequestInternal(
   }
   const actionDetails = await iamActionDetails(service, serviceAction)
 
-  if (actionDetails.isWildcardOnly && variant !== 'normal') {
+  if (variant === 'virtualPrincipal' && !splitArnParts(simulationRequest.principal!).accountId) {
+    throw new Error(`Virtual principal ${simulationRequest.principal} must contain an account ID.`)
+  }
+
+  if (
+    actionDetails.isWildcardOnly &&
+    (variant === 'anonymous' || variant === 'externalPrincipal' || variant === 'externalResource')
+  ) {
     const variantName =
       variant === 'anonymous'
         ? 'Anonymous'
@@ -414,8 +458,9 @@ async function simulateRequestInternal(
  * Build all principal-side policy inputs for the selected simulation variant.
  *
  * Collected-principal variants prepare collected identity policies, SCPs, and permission
- * boundaries. External principals receive only a synthetic administrator identity policy, while
- * anonymous requests receive no principal-side policies.
+ * boundaries. External principals receive only a synthetic administrator identity policy, virtual
+ * principals receive a synthetic or caller-provided identity policy plus captured organization
+ * policies, and anonymous requests receive no principal-side policies.
  *
  * @param variant the simulation policy-source variant
  * @param request the normalized request
@@ -439,6 +484,27 @@ async function principalPoliciesForVariant(
   }
 
   const principalArn = request.principal!
+  if (variant === 'virtualPrincipal') {
+    const accountId = splitArnParts(principalArn).accountId
+    if (!accountId) {
+      throw new Error(`Virtual principal ${principalArn} must contain an account ID.`)
+    }
+    const [serviceControlPolicies, principalAccountRcps] = await Promise.all([
+      collectClient.getScpHierarchyForAccount(accountId),
+      collectClient.getRcpHierarchyForAccount(accountId)
+    ])
+    return {
+      identityPolicies: [
+        request.inlinePolicy
+          ? { name: 'iam-lens:virtual-inline-policy', policy: request.inlinePolicy }
+          : syntheticIdentityPolicy
+      ],
+      serviceControlPolicies,
+      permissionBoundaryPolicies: undefined,
+      principalAccountRcps
+    }
+  }
+
   const collectedPolicies = await getAllPoliciesForPrincipal(collectClient, principalArn)
   return {
     identityPolicies: prepareIdentityPolicies(principalArn, collectedPolicies),
