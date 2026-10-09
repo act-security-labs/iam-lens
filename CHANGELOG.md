@@ -1,3 +1,10 @@
+## [0.1.168](https://github.com/act-security-labs/iam-lens/compare/v0.1.167...v0.1.168) (2026-10-09)
+
+
+### Features
+
+* add anonymous principal context keys ([#220](https://github.com/act-security-labs/iam-lens/issues/220)) ([f974583](https://github.com/act-security-labs/iam-lens/commit/f974583974ee68a37c081053e2e128ec9b9dcc48))
+
 ## [0.1.167](https://github.com/act-security-labs/iam-lens/compare/v0.1.166...v0.1.167) (2026-10-09)
 
 
