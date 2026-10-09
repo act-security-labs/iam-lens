@@ -182,6 +182,30 @@ const anonymousIntegrationCases: AnonymousIntegrationCase[] = [
     expected: 'Allowed'
   },
   {
+    name: 'matches canonical anonymous userid and principal type values',
+    data: '2',
+    request: {
+      resourceArn: 'arn:aws:s3:::anonymous-context-bucket/matching/report.txt',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed'
+  },
+  {
+    name: 'does not ignore a nonmatching anonymous principal type condition',
+    data: '2',
+    request: {
+      resourceArn: 'arn:aws:s3:::anonymous-context-bucket/non-anonymous/report.txt',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ImplicitlyDenied'
+  },
+  {
     name: 'rejects principal-derived caller context',
     data: '2',
     request: {

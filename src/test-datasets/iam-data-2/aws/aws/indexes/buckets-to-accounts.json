@@ -19,6 +19,10 @@
     "accountId": "500000000003",
     "region": "us-west-2"
   },
+  "anonymous-context-bucket": {
+    "accountId": "500000000003",
+    "region": "us-west-2"
+  },
   "account-bpa-specific-principal-bucket": {
     "accountId": "500000000001",
     "region": "us-west-2"

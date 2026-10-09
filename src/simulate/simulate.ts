@@ -769,7 +769,6 @@ const anonymousAbsentContextKeys = new Set([
   'aws:principalorgid',
   'aws:principalorgpaths',
   'aws:username',
-  'aws:userid',
   'aws:principalisawsservice',
   'aws:principalservicename',
   'aws:sourceaccount',

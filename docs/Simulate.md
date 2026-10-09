@@ -46,7 +46,7 @@ You can also include any [Global CLI Options](GlobalCliOptions.md).
 
 ### Anonymous requests
 
-Use `--anonymous` to evaluate unsigned access to a concrete resource ARN. Anonymous requests have no identity policy, session policy, permission boundary, or SCP, and principal-derived context keys such as `aws:PrincipalArn` and `aws:PrincipalTag/team` cannot be supplied. The resource does not need to exist in the collected dataset, but `--resource-account` is required when its account cannot be inferred from the ARN or collected indexes. When available, collected resource policies, RCPs, VPC endpoint policies, and S3 ABAC/Block Public Access settings still apply. Wildcard-only actions are unsupported.
+Use `--anonymous` to evaluate unsigned access to a concrete resource ARN. Anonymous requests have no identity policy, session policy, permission boundary, or SCP. They set `aws:userid` to `anonymous` and `aws:PrincipalType` to `Anonymous`. Callers cannot override these generated values or supply other principal-derived context keys such as `aws:PrincipalArn` and `aws:PrincipalTag/team`. The resource does not need to exist in the collected dataset, but `--resource-account` is required when its account cannot be inferred from the ARN or collected indexes. When available, collected resource policies, RCPs, VPC endpoint policies, and S3 ABAC/Block Public Access settings still apply. Wildcard-only actions are unsupported.
 
 ```bash
 iam-lens simulate \

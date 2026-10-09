@@ -160,7 +160,10 @@ export async function createContextKeys(
   }
 
   const principal = simulationRequest.principal
-  if (principal && isArnPrincipal(principal)) {
+  if (!principal) {
+    contextKeys['aws:userid'] = 'anonymous'
+    contextKeys['aws:PrincipalType'] = 'Anonymous'
+  } else if (isArnPrincipal(principal)) {
     const arnParts = splitArnParts(principal)
     const principalArnForContext =
       resolvedPrincipalArnForContext ??

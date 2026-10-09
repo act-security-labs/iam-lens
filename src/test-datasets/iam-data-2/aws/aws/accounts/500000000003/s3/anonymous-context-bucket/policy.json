@@ -1,0 +1,30 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowCanonicalAnonymousContext",
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::anonymous-context-bucket/matching/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:userid": "anonymous",
+          "aws:PrincipalType": "Anonymous"
+        }
+      }
+    },
+    {
+      "Sid": "AllowNonAnonymousPrincipalType",
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::anonymous-context-bucket/non-anonymous/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:PrincipalType": "User"
+        }
+      }
+    }
+  ]
+}
