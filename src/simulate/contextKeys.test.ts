@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { testStore } from '../collect/inMemoryClient.js'
 import { createContextKeys, servicePrincipalKmsCallerAccountPlaceholder } from './contextKeys.js'
-import { SimulationRequest } from './simulate.js'
+import { type InternalSimulationRequest, SimulationRequest } from './simulate.js'
 
 const defaultSimulationRequest: SimulationRequest = {
   simulationMode: 'Strict',
@@ -506,8 +506,23 @@ describe('createContextKeys', () => {
       expect(contextKeys['aws:PrincipalType']).toBe('FederatedUser')
     })
 
-    it.todo('should set aws:PrincipalType to Anonymous for anonymous requests', async () => {
-      // Not implemented yet
+    it('should set aws:PrincipalType to Anonymous for anonymous requests', async () => {
+      //Given a simulation request without an authenticated principal
+      const simulationRequest: InternalSimulationRequest = {
+        ...defaultSimulationRequest,
+        principal: undefined
+      }
+
+      //When creating context keys
+      const { contextKeys } = await createContextKeys(
+        testStore().client,
+        simulationRequest,
+        's3',
+        {}
+      )
+
+      //Then aws:PrincipalType should use the canonical anonymous value
+      expect(contextKeys['aws:PrincipalType']).toBe('Anonymous')
     })
 
     it('should not set aws:PrincipalType for service principals', async () => {
@@ -678,7 +693,24 @@ describe('createContextKeys', () => {
       expect(contextKeys['aws:userid']).toBeUndefined()
     })
     it.todo('should set aws:userid to `role-id:ec2-instance-id` for EC2 instances', async () => {})
-    it.todo('should set aws:userid to anonymous for anonymous requests', async () => {})
+    it('should set aws:userid to anonymous for anonymous requests', async () => {
+      //Given a simulation request without an authenticated principal
+      const simulationRequest: InternalSimulationRequest = {
+        ...defaultSimulationRequest,
+        principal: undefined
+      }
+
+      //When creating context keys
+      const { contextKeys } = await createContextKeys(
+        testStore().client,
+        simulationRequest,
+        's3',
+        {}
+      )
+
+      //Then aws:userid should use the canonical lowercase anonymous value
+      expect(contextKeys['aws:userid']).toBe('anonymous')
+    })
   })
 
   describe('aws:username', () => {
