@@ -26,6 +26,11 @@ export interface CreateContextKeysOptions {
    * Whether resource tags and presence should be loaded from collected data.
    */
   includeResourceMetadata?: boolean
+
+  /**
+   * Whether principal tags should be loaded from collected IAM metadata.
+   */
+  includePrincipalTags?: boolean
 }
 
 /**
@@ -174,13 +179,15 @@ export async function createContextKeys(
       contextKeys['aws:PrincipalOrgPaths'] = makeOrgPaths(orgId, orgStructure)
     }
 
-    const { tags } = await collectClient.getTagsForResource(
-      principalArnForContext,
-      principalAccountId
-    )
+    if (options.includePrincipalTags !== false) {
+      const { tags } = await collectClient.getTagsForResource(
+        principalArnForContext,
+        principalAccountId
+      )
 
-    for (const [key, value] of Object.entries(tags)) {
-      contextKeys[`aws:PrincipalTag/${key}`] = value
+      for (const [key, value] of Object.entries(tags)) {
+        contextKeys[`aws:PrincipalTag/${key}`] = value
+      }
     }
 
     contextKeys['aws:PrincipalIsAWSService'] = 'false'

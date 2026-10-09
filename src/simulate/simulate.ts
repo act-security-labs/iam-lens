@@ -424,7 +424,7 @@ async function simulateRequestInternal(
     service,
     simulationRequest.customContextKeys,
     principalArnForContext,
-    { includeResourceMetadata }
+    { includePrincipalTags: requiresCollectedPrincipal, includeResourceMetadata }
   )
 
   const vpcEndpointPolicy = await getVpcEndpointPolicy(collectClient, contextKeys)
@@ -454,12 +454,13 @@ async function simulateRequestInternal(
     contextKeys,
     simulationRequest.customContextKeys
   )
+  const principalTagsAreUnknown = variant === 'externalPrincipal' || variant === 'virtualPrincipal'
   const strictContextKeys = makeStrictContextKeys(
     simulationRequest,
     contextKeys,
     resourceTagsAreKnown,
     isS3BucketOrObjectArn(simulationRequest.resourceArn || ''),
-    requiresCollectedPrincipal,
+    principalTagsAreUnknown,
     sessionTagCapability,
     mutableExistingPrincipalTagKeys
   )
@@ -667,7 +668,7 @@ async function applyS3Settings(
  * @param contextKeys generated and caller-provided context values
  * @param resourceTagsAreKnown whether all resource tags are known
  * @param s3BucketOrObjectRequest whether S3 bucket tag keys apply
- * @param principalIsCollected whether absent principal metadata is authoritative
+ * @param principalTagsAreUnknown whether synthetic principal tag presence and values are unknown
  * @param sessionTagCapability trust-policy-derived role session-tag capability, when applicable
  * @param mutablePrincipalTagKeys stored PrincipalTag keys whose values are not authoritative
  * @returns strict literal keys and key patterns
@@ -677,7 +678,7 @@ function makeStrictContextKeys(
   contextKeys: ContextKeys,
   resourceTagsAreKnown: boolean,
   s3BucketOrObjectRequest: boolean,
-  principalIsCollected: boolean,
+  principalTagsAreUnknown: boolean,
   sessionTagCapability: RoleSessionTagCapability | undefined,
   mutablePrincipalTagKeys: ReadonlySet<string>
 ): string[] {
@@ -693,7 +694,7 @@ function makeStrictContextKeys(
       strictContextKeys.push(CONTEXT_KEYS.assumedRoot)
     }
   }
-  if (principalIsCollected && request.principal && isIamUserArn(request.principal)) {
+  if (!principalTagsAreUnknown && request.principal && isIamUserArn(request.principal)) {
     strictContextKeys.push('/^aws:PrincipalTag\/.*/')
   }
   if (sessionTagCapability) {
@@ -717,7 +718,11 @@ function makeStrictContextKeys(
   // There also may be other tag context keys, so add those too. Mutable role tags must not
   // receive a strict constraint because iam-simulate merges constraints with true-winning semantics.
   for (const key of Object.keys(contextKeys)) {
-    if (isTagContextKey(key) && !mutablePrincipalTagKeys.has(key)) {
+    if (
+      isTagContextKey(key) &&
+      !(principalTagsAreUnknown && isPrincipalTagContextKey(key)) &&
+      !mutablePrincipalTagKeys.has(key)
+    ) {
       strictContextKeys.push(key)
     }
   }
@@ -743,6 +748,21 @@ function isTagContextKey(key: string): boolean {
 
 const awsSourceKeyPrefix = 'aws:source'
 const awsPrincipalTagPrefix = 'aws:principaltag/'
+
+/**
+ * Checks whether a context key is in the PrincipalTag namespace.
+ *
+ * @param key context-key name to inspect
+ * @returns true when the key starts with `aws:PrincipalTag/`, ignoring case
+ */
+function isPrincipalTagContextKey(key: string): boolean {
+  return (
+    key
+      .slice(0, awsPrincipalTagPrefix.length)
+      .localeCompare(awsPrincipalTagPrefix, undefined, { sensitivity: 'base' }) === 0
+  )
+}
+
 const anonymousAbsentContextKeys = new Set([
   'aws:principalarn',
   'aws:principalaccount',
@@ -823,11 +843,7 @@ function mutableStoredPrincipalTagKeys(
   }
 
   const storedPrincipalTagKeys = Object.keys(contextKeys).filter(
-    (key) =>
-      key
-        .slice(0, awsPrincipalTagPrefix.length)
-        .localeCompare(awsPrincipalTagPrefix, undefined, { sensitivity: 'base' }) === 0 &&
-      !hasCustomContextKey(customContextKeys, key)
+    (key) => isPrincipalTagContextKey(key) && !hasCustomContextKey(customContextKeys, key)
   )
   if (capability.type === 'any') {
     return new Set(storedPrincipalTagKeys)

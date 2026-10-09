@@ -91,6 +91,103 @@ const externalPrincipalIntegrationCases: ExternalPrincipalIntegrationCase[] = [
     }
   },
   {
+    name: 'does not trust collected tags when a role is simulated as an external principal',
+    data: '2',
+    request: {
+      principal: 'arn:aws:iam::400000000002:role/tagged-role',
+      resourceArn: 'arn:aws:s3:::external-principal-tag-cross-account-bucket/report.txt',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedConditions: {
+      conditionType: 'condition',
+      op: 'StringEquals',
+      key: 'aws:PrincipalTag/team',
+      values: ['security'],
+      sources: [
+        {
+          policyType: 'resource',
+          effect: 'Allow',
+          policyIdentifier: undefined,
+          statementId: 'AllowSecurityTeam',
+          statementIndex: 1
+        }
+      ]
+    }
+  },
+  {
+    name: 'returns an unresolved principal tag condition for an uncollected role session',
+    data: '2',
+    request: {
+      principal: 'arn:aws:sts::999999999999:assumed-role/ExternalAdministrator/integration-test',
+      resourceArn: 'arn:aws:s3:::external-principal-tag-bucket/report.txt',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedConditions: {
+      conditionType: 'condition',
+      op: 'StringEquals',
+      key: 'aws:PrincipalTag/team',
+      values: ['security'],
+      sources: [
+        {
+          policyType: 'resource',
+          effect: 'Allow',
+          policyIdentifier: undefined,
+          statementId: 'AllowSecurityTeam',
+          statementIndex: 1
+        }
+      ]
+    }
+  },
+  {
+    name: 'returns an unresolved principal tag condition for an uncollected IAM user',
+    data: '2',
+    request: {
+      principal: 'arn:aws:iam::999999999999:user/ExternalAdministrator',
+      resourceArn: 'arn:aws:s3:::external-principal-tag-bucket/report.txt',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedConditions: {
+      conditionType: 'condition',
+      op: 'StringEquals',
+      key: 'aws:PrincipalTag/team',
+      values: ['security'],
+      sources: [
+        {
+          policyType: 'resource',
+          effect: 'Allow',
+          policyIdentifier: undefined,
+          statementId: 'AllowSecurityTeam',
+          statementIndex: 1
+        }
+      ]
+    }
+  },
+  {
+    name: 'allows an uncollected IAM user with an explicit matching principal tag',
+    data: '2',
+    request: {
+      principal: 'arn:aws:iam::999999999999:user/ExternalAdministrator',
+      resourceArn: 'arn:aws:s3:::external-principal-tag-bucket/report.txt',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      customContextKeys: { 'aws:PrincipalTag/team': 'security' },
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed'
+  },
+  {
     name: 'allows when a matching principal tag is supplied in Discovery mode',
     data: '2',
     request: {

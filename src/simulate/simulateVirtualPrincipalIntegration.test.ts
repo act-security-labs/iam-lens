@@ -1,4 +1,4 @@
-import type { EvaluationResult } from '@actsecurity/iam-simulate'
+import type { AllowedConditionExpression, EvaluationResult } from '@actsecurity/iam-simulate'
 import { assert, describe, expect, it } from 'vitest'
 import { getTestDatasetClient } from '../test-datasets/testClient.js'
 import {
@@ -22,6 +22,9 @@ interface VirtualPrincipalIntegrationCase {
 
   /** Expected final authorization decision. */
   expected: EvaluationResult
+
+  /** Exact unresolved Discovery conditions expected in the result. */
+  expectedConditions?: AllowedConditionExpression
 
   /** Optional policy analysis that must explain the decision. */
   expectedAnalysis?: 'scp-deny' | 'scp-allow' | 'rcp-deny'
@@ -87,6 +90,131 @@ const virtualPrincipalIntegrationCases: VirtualPrincipalIntegrationCase[] = [
     expected: 'ImplicitlyDenied'
   },
   {
+    name: 'returns an unresolved principal tag condition for a virtual IAM role',
+    data: '2',
+    request: {
+      principal: 'arn:aws:iam::400000000001:role/VirtualAdministrator',
+      resourceArn: 'arn:aws:s3:::external-principal-tag-bucket/report.txt',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedConditions: {
+      conditionType: 'condition',
+      op: 'StringEquals',
+      key: 'aws:PrincipalTag/team',
+      values: ['security'],
+      sources: [
+        {
+          policyType: 'resource',
+          effect: 'Allow',
+          policyIdentifier: undefined,
+          statementId: 'AllowSecurityTeam',
+          statementIndex: 1
+        }
+      ]
+    }
+  },
+  {
+    name: 'does not trust collected tags when a role is simulated as a virtual principal',
+    data: '2',
+    request: {
+      principal: 'arn:aws:iam::400000000002:role/tagged-role',
+      resourceArn: 'arn:aws:s3:::external-principal-tag-cross-account-bucket/report.txt',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedConditions: {
+      conditionType: 'condition',
+      op: 'StringEquals',
+      key: 'aws:PrincipalTag/team',
+      values: ['security'],
+      sources: [
+        {
+          policyType: 'resource',
+          effect: 'Allow',
+          policyIdentifier: undefined,
+          statementId: 'AllowSecurityTeam',
+          statementIndex: 1
+        }
+      ]
+    }
+  },
+  {
+    name: 'returns an unresolved principal tag condition for a virtual role session',
+    data: '2',
+    request: {
+      principal: 'arn:aws:sts::400000000001:assumed-role/VirtualAdministrator/integration-test',
+      resourceArn: 'arn:aws:s3:::external-principal-tag-bucket/report.txt',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedConditions: {
+      conditionType: 'condition',
+      op: 'StringEquals',
+      key: 'aws:PrincipalTag/team',
+      values: ['security'],
+      sources: [
+        {
+          policyType: 'resource',
+          effect: 'Allow',
+          policyIdentifier: undefined,
+          statementId: 'AllowSecurityTeam',
+          statementIndex: 1
+        }
+      ]
+    }
+  },
+  {
+    name: 'returns an unresolved principal tag condition for a virtual IAM user',
+    data: '2',
+    request: {
+      principal: 'arn:aws:iam::400000000001:user/VirtualAdministrator',
+      resourceArn: 'arn:aws:s3:::external-principal-tag-bucket/report.txt',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedConditions: {
+      conditionType: 'condition',
+      op: 'StringEquals',
+      key: 'aws:PrincipalTag/team',
+      values: ['security'],
+      sources: [
+        {
+          policyType: 'resource',
+          effect: 'Allow',
+          policyIdentifier: undefined,
+          statementId: 'AllowSecurityTeam',
+          statementIndex: 1
+        }
+      ]
+    }
+  },
+  {
+    name: 'allows a virtual IAM user with an explicit matching principal tag',
+    data: '2',
+    request: {
+      principal: 'arn:aws:iam::400000000001:user/VirtualAdministrator',
+      resourceArn: 'arn:aws:s3:::external-principal-tag-bucket/report.txt',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      customContextKeys: { 'aws:PrincipalTag/team': 'security' },
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed'
+  },
+  {
     name: 'applies a captured resource RCP to a virtual principal',
     data: '1',
     request: {
@@ -129,6 +257,12 @@ describe('simulateVirtualPrincipal integration', () => {
       assertSuccessfulResult(response)
       expect(response.request.principal).toBe(testCase.request.principal)
       expect(response.result.overallResult).toBe(testCase.expected)
+      if (Object.hasOwn(testCase, 'expectedConditions')) {
+        if (response.result.resultType !== 'single') {
+          assert.fail(`Expected single result, got ${response.result.resultType}`)
+        }
+        expect(response.result.result.analysis.conditions).toEqual(testCase.expectedConditions)
+      }
       assertExpectedAnalysis(response, testCase.expectedAnalysis)
     })
   }
