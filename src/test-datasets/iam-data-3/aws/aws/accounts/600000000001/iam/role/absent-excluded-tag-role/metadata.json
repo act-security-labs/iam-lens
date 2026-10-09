@@ -1,0 +1,7 @@
+{
+  "arn": "arn:aws:iam::600000000001:role/absent-excluded-tag-role",
+  "name": "absent-excluded-tag-role",
+  "id": "AROAABSENTEXCLUDED01",
+  "path": "/",
+  "created": "2025-01-01T00:00:00.000Z"
+}

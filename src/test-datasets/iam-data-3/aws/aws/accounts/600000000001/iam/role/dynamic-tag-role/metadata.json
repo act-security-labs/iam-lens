@@ -1,0 +1,7 @@
+{
+  "arn": "arn:aws:iam::600000000001:role/dynamic-tag-role",
+  "name": "dynamic-tag-role",
+  "id": "AROA0000DYNAMICTAG001",
+  "path": "/",
+  "created": "2025-01-01T00:00:00.000Z"
+}

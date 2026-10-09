@@ -514,6 +514,434 @@ describe('RCP simulation exclusions', () => {
   })
 })
 
+describe('role session-tag Discovery constraints', () => {
+  const accountId = '123456789012'
+  const tableArn = `arn:aws:dynamodb:us-east-1:${accountId}:table/tagged-table`
+
+  /**
+   * Creates a principal-tag-gated identity policy.
+   *
+   * @param tagKey the principal tag required by the policy
+   * @returns inline-policy metadata accepted by the test store
+   */
+  function taggedAccessPolicy(tagKey: string) {
+    return [
+      {
+        PolicyName: 'TaggedTableAccess',
+        PolicyDocument: {
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Action: 'dynamodb:GetItem',
+              Resource: tableArn,
+              Condition: { StringEquals: { [`aws:PrincipalTag/${tagKey}`]: 'Engineering' } }
+            }
+          ]
+        }
+      }
+    ]
+  }
+
+  /**
+   * Runs a Discovery simulation for a principal-tag-gated request.
+   *
+   * @param principal the role, role session, or user to simulate
+   * @param client the synthetic collect client
+   * @param customContextKeys optional authoritative caller context
+   * @returns the simulation result
+   */
+  async function runDiscovery(
+    principal: string,
+    client: ReturnType<typeof testStore>['client'],
+    customContextKeys: Record<string, string | string[]> = {}
+  ) {
+    const { result } = await simulateRequest(
+      {
+        simulationMode: 'Discovery',
+        principal,
+        resourceArn: tableArn,
+        resourceAccount: accountId,
+        action: 'dynamodb:GetItem',
+        customContextKeys
+      },
+      client
+    )
+    return result
+  }
+
+  /**
+   * Runs a Discovery simulation and returns its allowed single-resource analysis.
+   *
+   * @param principal the role, role session, or user to simulate
+   * @param client the synthetic collect client
+   * @param customContextKeys optional authoritative caller context
+   * @returns the successful request analysis
+   */
+  async function discoveryAnalysis(
+    principal: string,
+    client: ReturnType<typeof testStore>['client'],
+    customContextKeys: Record<string, string | string[]> = {}
+  ) {
+    const result = await runDiscovery(principal, client, customContextKeys)
+    if (result.resultType === 'error') {
+      assert.fail(`Simulation resulted in error: ${result.errors.message}`)
+    }
+    expect(result.overallResult).toBe('Allowed')
+    if (result.resultType !== 'single') {
+      assert.fail(`Expected single result type, got ${result.resultType}`)
+    }
+    return result.result.analysis
+  }
+
+  it('keeps stored role tags strict without a TagSession Allow', async () => {
+    //Given a tagged role whose trust policy only permits AssumeRole
+    const { store, client } = testStore()
+    const roleArn = `arn:aws:iam::${accountId}:role/StaticTaggedRole`
+    await saveRole(store, {
+      arn: roleArn,
+      inlinePolicies: taggedAccessPolicy('Department'),
+      trustPolicy: {
+        Version: '2012-10-17',
+        Statement: [{ Effect: 'Allow', Principal: '*', Action: 'sts:AssumeRole' }]
+      }
+    })
+    await store.saveResourceMetadata(accountId, roleArn, 'tags', { Department: 'Engineering' })
+
+    //When simulating the matching tag-gated request
+    const analysis = await discoveryAnalysis(roleArn, client)
+
+    //Then the stored role tag proves unconditional access
+    expect(analysis.conditions).toBeUndefined()
+    expect(analysis.ignoredConditions?.identity?.allow).toBeUndefined()
+  })
+
+  it('treats an absent immutable role tag as authoritatively absent', async () => {
+    //Given an untagged role that cannot receive session tags
+    const { store, client } = testStore()
+    const roleArn = `arn:aws:iam::${accountId}:role/UntaggedStaticRole`
+    await saveRole(store, {
+      arn: roleArn,
+      inlinePolicies: taggedAccessPolicy('Department'),
+      trustPolicy: {
+        Version: '2012-10-17',
+        Statement: [{ Effect: 'Allow', Principal: '*', Action: 'sts:AssumeRole' }]
+      }
+    })
+
+    //When simulating access that requires the absent tag
+    const result = await runDiscovery(roleArn, client)
+
+    //Then known absence prevents the conditional Allow from applying
+    if (result.resultType === 'error') {
+      assert.fail(`Simulation resulted in error: ${result.errors.message}`)
+    }
+    expect(result.overallResult).toBe('ImplicitlyDenied')
+  })
+
+  it('returns conditional access for an absent tag that an unrestricted session may supply', async () => {
+    //Given an untagged role whose trust policy permits arbitrary session tags
+    const { store, client } = testStore()
+    const roleArn = `arn:aws:iam::${accountId}:role/UntaggedDynamicRole`
+    await saveRole(store, {
+      arn: roleArn,
+      inlinePolicies: taggedAccessPolicy('Department'),
+      trustPolicy: {
+        Version: '2012-10-17',
+        Statement: [
+          { Effect: 'Allow', Principal: '*', Action: ['sts:AssumeRole', 'sts:TagSession'] }
+        ]
+      }
+    })
+
+    //When simulating access that requires the potentially supplied tag
+    const analysis = await discoveryAnalysis(roleArn, client)
+
+    //Then both presence and value remain conditional
+    expect(analysis.conditions).toEqual(
+      expect.objectContaining({ key: 'aws:PrincipalTag/Department' })
+    )
+  })
+
+  it('returns conditional access for an unrestricted TagSession Allow', async () => {
+    //Given a tagged role whose trust policy permits arbitrary session tags
+    const { store, client } = testStore()
+    const roleArn = `arn:aws:iam::${accountId}:role/DynamicTaggedRole`
+    await saveRole(store, {
+      arn: roleArn,
+      inlinePolicies: taggedAccessPolicy('Department'),
+      trustPolicy: {
+        Version: '2012-10-17',
+        Statement: [
+          { Effect: 'Allow', Principal: '*', Action: ['sts:AssumeRole', 'sts:TagSession'] }
+        ]
+      }
+    })
+    await store.saveResourceMetadata(accountId, roleArn, 'tags', { Department: 'Engineering' })
+
+    //When simulating the matching tag-gated request
+    const analysis = await discoveryAnalysis(roleArn, client)
+
+    //Then access retains the PrincipalTag condition because a session can override its value
+    expect(analysis.conditions).toEqual(
+      expect.objectContaining({
+        conditionType: 'condition',
+        op: 'StringEquals',
+        key: 'aws:PrincipalTag/Department',
+        values: ['Engineering']
+      })
+    )
+    expect(analysis.ignoredConditions?.identity?.allow).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: 'aws:PrincipalTag/Department', op: 'StringEquals' })
+      ])
+    )
+  })
+
+  it('does not change Strict-mode evaluation for a role with mutable session tags', async () => {
+    //Given a tagged role whose trust policy permits arbitrary session tags
+    const { store, client } = testStore()
+    const roleArn = `arn:aws:iam::${accountId}:role/StrictDynamicTaggedRole`
+    await saveRole(store, {
+      arn: roleArn,
+      inlinePolicies: taggedAccessPolicy('Department'),
+      trustPolicy: {
+        Version: '2012-10-17',
+        Statement: [
+          { Effect: 'Allow', Principal: '*', Action: ['sts:AssumeRole', 'sts:TagSession'] }
+        ]
+      }
+    })
+    await store.saveResourceMetadata(accountId, roleArn, 'tags', { Department: 'Engineering' })
+
+    //When evaluating the same request in Strict mode
+    const { result } = await simulateRequest(
+      {
+        simulationMode: 'Strict',
+        principal: roleArn,
+        resourceArn: tableArn,
+        resourceAccount: accountId,
+        action: 'dynamodb:GetItem',
+        customContextKeys: {}
+      },
+      client
+    )
+
+    //Then the stored value remains authoritative and access is unconditional
+    if (result.resultType === 'error') {
+      assert.fail(`Simulation resulted in error: ${result.errors.message}`)
+    }
+    expect(result.overallResult).toBe('Allowed')
+    if (result.resultType !== 'single') {
+      assert.fail(`Expected single result type, got ${result.resultType}`)
+    }
+    expect(result.result.analysis.conditions).toBeUndefined()
+  })
+
+  it('keeps a stored role tag strict when a ForAll TagKeys allowlist excludes it', async () => {
+    //Given a trust policy that allows only an unrelated session-tag key
+    const { store, client } = testStore()
+    const roleArn = `arn:aws:iam::${accountId}:role/LimitedTaggedRole`
+    await saveRole(store, {
+      arn: roleArn,
+      inlinePolicies: taggedAccessPolicy('Department'),
+      trustPolicy: {
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Principal: '*',
+            Action: 'sts:TagSession',
+            Condition: { 'ForAllValues:StringEquals': { 'aws:TagKeys': 'Environment' } }
+          }
+        ]
+      }
+    })
+    await store.saveResourceMetadata(accountId, roleArn, 'tags', { Department: 'Engineering' })
+
+    //When simulating the matching tag-gated request
+    const analysis = await discoveryAnalysis(roleArn, client)
+
+    //Then the Department role tag remains authoritative
+    expect(analysis.conditions).toBeUndefined()
+  })
+
+  it('treats an absent tag outside a ForAll TagKeys allowlist as authoritatively absent', async () => {
+    //Given an untagged role whose sessions may only supply Environment
+    const { store, client } = testStore()
+    const roleArn = `arn:aws:iam::${accountId}:role/UntaggedLimitedRole`
+    await saveRole(store, {
+      arn: roleArn,
+      inlinePolicies: taggedAccessPolicy('Department'),
+      trustPolicy: {
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Principal: '*',
+            Action: ['sts:AssumeRole', 'sts:TagSession'],
+            Condition: { 'ForAllValues:StringEquals': { 'aws:TagKeys': 'Environment' } }
+          }
+        ]
+      }
+    })
+
+    //When simulating access that requires absent Department
+    const result = await runDiscovery(roleArn, client)
+
+    //Then Department is immutable and known absent
+    if (result.resultType === 'error') {
+      assert.fail(`Simulation resulted in error: ${result.errors.message}`)
+    }
+    expect(result.overallResult).toBe('ImplicitlyDenied')
+  })
+
+  it('returns conditional access for an absent tag inside a ForAll TagKeys allowlist', async () => {
+    //Given an untagged role whose sessions may supply Department
+    const { store, client } = testStore()
+    const roleArn = `arn:aws:iam::${accountId}:role/UntaggedAllowlistedRole`
+    await saveRole(store, {
+      arn: roleArn,
+      inlinePolicies: taggedAccessPolicy('Department'),
+      trustPolicy: {
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Principal: '*',
+            Action: ['sts:AssumeRole', 'sts:TagSession'],
+            Condition: { 'ForAllValues:StringEquals': { 'aws:TagKeys': 'Department' } }
+          }
+        ]
+      }
+    })
+
+    //When simulating access that requires potentially supplied Department
+    const analysis = await discoveryAnalysis(roleArn, client)
+
+    //Then Department presence and value remain conditional
+    expect(analysis.conditions).toEqual(
+      expect.objectContaining({ key: 'aws:PrincipalTag/Department' })
+    )
+  })
+
+  it('unions different ForAll TagKeys allowlists across TagSession Allows', async () => {
+    //Given separate TagSession paths that permit Department and Environment
+    const { store, client } = testStore()
+    const roleArn = `arn:aws:iam::${accountId}:role/UnionTaggedRole`
+    await saveRole(store, {
+      arn: roleArn,
+      inlinePolicies: taggedAccessPolicy('Environment'),
+      trustPolicy: {
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Principal: '*',
+            Action: 'sts:TagSession',
+            Condition: { 'ForAllValues:StringEquals': { 'aws:TagKeys': 'Department' } }
+          },
+          {
+            Effect: 'Allow',
+            Principal: '*',
+            Action: 'sts:TagSession',
+            Condition: { 'ForAllValues:StringEquals': { 'aws:TagKeys': 'Environment' } }
+          }
+        ]
+      }
+    })
+    await store.saveResourceMetadata(accountId, roleArn, 'tags', {
+      Department: 'Engineering',
+      Environment: 'Engineering'
+    })
+
+    //When simulating access gated by the second statement's tag key
+    const analysis = await discoveryAnalysis(roleArn, client)
+
+    //Then Environment is mutable through the union of possible TagSession paths
+    expect(analysis.conditions).toEqual(
+      expect.objectContaining({ key: 'aws:PrincipalTag/Environment' })
+    )
+  })
+
+  it('uses the canonical role trust policy for an assumed-role session', async () => {
+    //Given an assumed-role session whose underlying role permits arbitrary session tags
+    const { store, client } = testStore()
+    const roleArn = `arn:aws:iam::${accountId}:role/SessionTaggedRole`
+    const sessionArn = `arn:aws:sts::${accountId}:assumed-role/SessionTaggedRole/session`
+    await saveRole(store, {
+      arn: roleArn,
+      inlinePolicies: taggedAccessPolicy('Department'),
+      trustPolicy: {
+        Version: '2012-10-17',
+        Statement: [{ Effect: 'Allow', Principal: '*', Action: 'sts:TagSession' }]
+      }
+    })
+    await store.saveResourceMetadata(accountId, roleArn, 'tags', { Department: 'Engineering' })
+
+    //When simulating as the session ARN
+    const analysis = await discoveryAnalysis(sessionArn, client)
+
+    //Then the underlying role's trust policy makes the tag value conditional
+    expect(analysis.conditions).toEqual(
+      expect.objectContaining({ key: 'aws:PrincipalTag/Department' })
+    )
+  })
+
+  it('treats an explicit custom value as authoritative even when the role tag is mutable', async () => {
+    //Given an untagged role that permits arbitrary session tags
+    const { store, client } = testStore()
+    const roleArn = `arn:aws:iam::${accountId}:role/CustomTaggedRole`
+    await saveRole(store, {
+      arn: roleArn,
+      inlinePolicies: taggedAccessPolicy('Department'),
+      trustPolicy: {
+        Version: '2012-10-17',
+        Statement: [{ Effect: 'Allow', Principal: '*', Action: 'sts:TagSession' }]
+      }
+    })
+
+    //When the caller explicitly supplies the matching PrincipalTag value
+    const analysis = await discoveryAnalysis(roleArn, client, {
+      'aws:PrincipalTag/Department': 'Engineering'
+    })
+
+    //Then the caller-provided value is strict rather than session-conditional
+    expect(analysis.conditions).toBeUndefined()
+  })
+
+  it('keeps IAM user tags strict in Discovery mode', async () => {
+    //Given a user with a stored tag and matching tag-gated access
+    const { store, client } = testStore()
+    const userArn = `arn:aws:iam::${accountId}:user/TaggedUser`
+    await saveUser(store, { arn: userArn, inlinePolicies: taggedAccessPolicy('Department') })
+    await store.saveResourceMetadata(accountId, userArn, 'tags', { Department: 'Engineering' })
+
+    //When simulating the request as the user
+    const analysis = await discoveryAnalysis(userArn, client)
+
+    //Then user tags remain authoritative because users cannot receive role-session tags
+    expect(analysis.conditions).toBeUndefined()
+    expect(analysis.ignoredConditions?.identity?.allow).toBeUndefined()
+  })
+
+  it('treats an absent IAM user tag as authoritatively absent', async () => {
+    //Given an untagged IAM user with tag-gated access
+    const { store, client } = testStore()
+    const userArn = `arn:aws:iam::${accountId}:user/UntaggedUser`
+    await saveUser(store, { arn: userArn, inlinePolicies: taggedAccessPolicy('Department') })
+
+    //When simulating access that requires the absent tag
+    const result = await runDiscovery(userArn, client)
+
+    //Then user-tag absence is strict because users cannot receive session tags
+    if (result.resultType === 'error') {
+      assert.fail(`Simulation resulted in error: ${result.errors.message}`)
+    }
+    expect(result.overallResult).toBe('ImplicitlyDenied')
+  })
+})
+
 describe('aws:userid strict context key behavior', () => {
   const useridConditionPolicy = [
     {
@@ -811,6 +1239,39 @@ describe('caller-provided Discovery context keys', () => {
       presenceIsKnown: true,
       valueIsKnown: true
     })
+  })
+
+  it('should treat a mutable stored PrincipalTag as known present with an unknown value', () => {
+    //Given a stored PrincipalTag that the role session may override
+    const keyName = 'aws:PrincipalTag/Department'
+    const request = {
+      simulationMode: 'Discovery' as const,
+      principal: 'arn:aws:iam::123456789012:role/TaggedRole',
+      customContextKeys: {}
+    }
+
+    //When resolving its Discovery constraint
+    const constraint = discoveryConstraintForStrictKey(keyName, request, new Set([keyName]))
+
+    //Then its baseline presence is known but its effective value is not
+    expect(constraint).toEqual({ keyName, presenceIsKnown: true, valueIsKnown: false })
+  })
+
+  it('should let an explicit strict key override role-session tag mutability', () => {
+    //Given a mutable stored PrincipalTag that the caller explicitly marks strict
+    const keyName = 'aws:PrincipalTag/Department'
+    const request = {
+      simulationMode: 'Discovery' as const,
+      principal: 'arn:aws:iam::123456789012:role/TaggedRole',
+      customContextKeys: {},
+      additionalStrictContextKeys: [keyName]
+    }
+
+    //When resolving its Discovery constraint
+    const constraint = discoveryConstraintForStrictKey(keyName, request, new Set([keyName]))
+
+    //Then explicit strictness keeps its presence and value authoritative
+    expect(constraint).toEqual({ keyName, presenceIsKnown: true, valueIsKnown: true })
   })
 })
 

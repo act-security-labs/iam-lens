@@ -1,0 +1,7 @@
+{
+  "arn": "arn:aws:iam::600000000001:user/tagged-user",
+  "name": "tagged-user",
+  "id": "AIDA0000TAGGEDUSER001",
+  "path": "/",
+  "created": "2025-01-01T00:00:00.000Z"
+}

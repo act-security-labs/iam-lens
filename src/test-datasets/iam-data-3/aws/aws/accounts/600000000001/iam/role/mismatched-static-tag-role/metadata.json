@@ -1,0 +1,7 @@
+{
+  "arn": "arn:aws:iam::600000000001:role/mismatched-static-tag-role",
+  "name": "mismatched-static-tag-role",
+  "id": "AROAMISMATCHSTATIC01",
+  "path": "/",
+  "created": "2025-01-01T00:00:00.000Z"
+}
