@@ -1,0 +1,7 @@
+{
+  "arn": "arn:aws:iam::600000000001:role/limited-tag-role",
+  "name": "limited-tag-role",
+  "id": "AROA0000LIMITEDTAG001",
+  "path": "/",
+  "created": "2025-01-01T00:00:00.000Z"
+}

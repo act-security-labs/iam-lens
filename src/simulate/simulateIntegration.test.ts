@@ -1,4 +1,8 @@
-import { EvaluationResult, RunSimulationResults } from '@actsecurity/iam-simulate'
+import {
+  EvaluationResult,
+  type RequestAnalysis,
+  RunSimulationResults
+} from '@actsecurity/iam-simulate'
 import { describe, expect, it } from 'vitest'
 import { getTestDatasetClient } from '../test-datasets/testClient.js'
 import { simulateRequest, SimulationRequest } from './simulate.js'
@@ -13,6 +17,7 @@ const simulateIntegrationTest: {
 
   expected: EvaluationResult
   expectedError?: string
+  expectedConditions?: RequestAnalysis['conditions']
 }[] = [
   {
     name: 'same account resource request with resource policy',
@@ -539,6 +544,314 @@ const simulateIntegrationTest: {
       simulationMode: 'Strict'
     },
     expected: 'Allowed'
+  },
+  {
+    name: 'Discovery treats a matching stored tag as strict without TagSession',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:s3:::conditional-bucket/report.txt',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      principal: 'arn:aws:iam::600000000001:role/static-tag-role',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedConditions: undefined
+  },
+  {
+    name: 'Discovery treats a matching stored tag as conditional with unrestricted TagSession',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:s3:::conditional-bucket/report.txt',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      principal: 'arn:aws:iam::600000000001:role/dynamic-tag-role',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedConditions: {
+      conditionType: 'condition',
+      op: 'StringEquals',
+      key: 'aws:PrincipalTag/Department',
+      values: ['Engineering'],
+      sources: [
+        {
+          effect: 'Allow',
+          policyIdentifier: undefined,
+          policyType: 'resource',
+          statementId: 'AllowEngineeringDepartment',
+          statementIndex: 1
+        }
+      ]
+    }
+  },
+  {
+    name: 'Discovery keeps a stored tag strict when a finite allowlist excludes it',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:s3:::conditional-bucket/report.txt',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      principal: 'arn:aws:iam::600000000001:role/limited-tag-role',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedConditions: undefined
+  },
+  {
+    name: 'Discovery makes a stored tag conditional when unioned finite allowlists include it',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:s3:::conditional-bucket/report.txt',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      principal: 'arn:aws:iam::600000000001:role/union-tag-role',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedConditions: {
+      conditionType: 'condition',
+      op: 'StringEquals',
+      key: 'aws:PrincipalTag/Department',
+      values: ['Engineering'],
+      sources: [
+        {
+          effect: 'Allow',
+          policyIdentifier: undefined,
+          policyType: 'resource',
+          statementId: 'AllowEngineeringDepartment',
+          statementIndex: 1
+        }
+      ]
+    }
+  },
+  {
+    name: 'Discovery treats an absent tag as authoritatively absent without TagSession',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:s3:::conditional-bucket/report.txt',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      principal: 'arn:aws:iam::600000000001:role/absent-static-tag-role',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ImplicitlyDenied',
+    expectedConditions: undefined
+  },
+  {
+    name: 'Discovery treats an absent tag as conditional with unrestricted TagSession',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:s3:::conditional-bucket/report.txt',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      principal: 'arn:aws:iam::600000000001:role/absent-dynamic-tag-role',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedConditions: {
+      conditionType: 'condition',
+      op: 'StringEquals',
+      key: 'aws:PrincipalTag/Department',
+      values: ['Engineering'],
+      sources: [
+        {
+          effect: 'Allow',
+          policyIdentifier: undefined,
+          policyType: 'resource',
+          statementId: 'AllowEngineeringDepartment',
+          statementIndex: 1
+        }
+      ]
+    }
+  },
+  {
+    name: 'Discovery treats an absent tag as conditional when a finite allowlist includes it',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:s3:::conditional-bucket/report.txt',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      principal: 'arn:aws:iam::600000000001:role/absent-allowlisted-tag-role',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedConditions: {
+      conditionType: 'condition',
+      op: 'StringEquals',
+      key: 'aws:PrincipalTag/Department',
+      values: ['Engineering'],
+      sources: [
+        {
+          effect: 'Allow',
+          policyIdentifier: undefined,
+          policyType: 'resource',
+          statementId: 'AllowEngineeringDepartment',
+          statementIndex: 1
+        }
+      ]
+    }
+  },
+  {
+    name: 'Discovery treats an absent tag as strict when a finite allowlist excludes it',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:s3:::conditional-bucket/report.txt',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      principal: 'arn:aws:iam::600000000001:role/absent-excluded-tag-role',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ImplicitlyDenied',
+    expectedConditions: undefined
+  },
+  {
+    name: 'Discovery can satisfy a nonmatching stored tag through a mutable session tag',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:s3:::conditional-bucket/report.txt',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      principal: 'arn:aws:iam::600000000001:role/mismatched-dynamic-tag-role',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedConditions: {
+      conditionType: 'condition',
+      op: 'StringEquals',
+      key: 'aws:PrincipalTag/Department',
+      values: ['Engineering'],
+      sources: [
+        {
+          effect: 'Allow',
+          policyIdentifier: undefined,
+          policyType: 'resource',
+          statementId: 'AllowEngineeringDepartment',
+          statementIndex: 1
+        }
+      ]
+    }
+  },
+  {
+    name: 'Discovery denies a nonmatching stored tag when it is immutable',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:s3:::conditional-bucket/report.txt',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      principal: 'arn:aws:iam::600000000001:role/mismatched-static-tag-role',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ImplicitlyDenied',
+    expectedConditions: undefined
+  },
+  {
+    name: 'Discovery keeps collected IAM user tags strict',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:s3:::conditional-bucket/report.txt',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      principal: 'arn:aws:iam::600000000001:user/tagged-user',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedConditions: undefined
+  },
+  {
+    name: 'Discovery denies an IAM user with a nonmatching stored tag',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:s3:::conditional-bucket/report.txt',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      principal: 'arn:aws:iam::600000000001:user/mismatched-tag-user',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ImplicitlyDenied',
+    expectedConditions: undefined
+  },
+  {
+    name: 'Discovery denies an IAM user with a missing tag',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:s3:::conditional-bucket/report.txt',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      principal: 'arn:aws:iam::600000000001:user/untagged-user',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ImplicitlyDenied',
+    expectedConditions: undefined
+  },
+  {
+    name: 'Discovery uses the canonical role trust policy for an assumed-role session',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:s3:::conditional-bucket/report.txt',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      principal: 'arn:aws:sts::600000000001:assumed-role/dynamic-tag-role/integration-test',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedConditions: {
+      conditionType: 'condition',
+      op: 'StringEquals',
+      key: 'aws:PrincipalTag/Department',
+      values: ['Engineering'],
+      sources: [
+        {
+          effect: 'Allow',
+          policyIdentifier: undefined,
+          policyType: 'resource',
+          statementId: 'AllowEngineeringDepartment',
+          statementIndex: 1
+        }
+      ]
+    }
+  },
+  {
+    name: 'Strict mode uses a matching stored tag even when sessions may override it',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:s3:::conditional-bucket/report.txt',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      principal: 'arn:aws:iam::600000000001:role/dynamic-tag-role',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'Allowed',
+    expectedConditions: undefined
+  },
+  {
+    name: 'Strict mode denies an absent tag even when a session could supply it',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:s3:::conditional-bucket/report.txt',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      principal: 'arn:aws:iam::600000000001:role/absent-dynamic-tag-role',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'ImplicitlyDenied',
+    expectedConditions: undefined
   }
 ]
 
@@ -569,6 +882,13 @@ describe('simulateIntegrationTest', () => {
           console.log(JSON.stringify(getRcpAnalysisForLogging(result), null, 2))
         }
         expect(result.overallResult).toEqual(test.expected)
+
+        if (Object.hasOwn(test, 'expectedConditions')) {
+          if (result.resultType !== 'single') {
+            throw new Error(`Expected a single simulation result, received ${result.resultType}`)
+          }
+          expect(result.result.analysis.conditions).toEqual(test.expectedConditions)
+        }
       }
     })
   }

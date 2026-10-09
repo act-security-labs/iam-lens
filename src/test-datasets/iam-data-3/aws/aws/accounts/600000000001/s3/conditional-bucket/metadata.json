@@ -1,0 +1,5 @@
+{
+  "name": "conditional-bucket",
+  "region": "us-east-1",
+  "arn": "arn:aws:s3:::conditional-bucket"
+}

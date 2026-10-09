@@ -13,6 +13,7 @@ import {
   convertAssumedRoleArnToRoleArn,
   isAssumedRoleArn,
   isIamRoleArn,
+  isIamUserArn,
   isS3BucketOrObjectArn,
   splitArnParts
 } from '@actsecurity/iam-utils'
@@ -40,6 +41,12 @@ import {
   knownContextKeys
 } from './contextKeys.js'
 import { externalResourcePolicy, syntheticIdentityPolicy } from './generatedPolicies.js'
+import {
+  immutablePrincipalTagPattern,
+  roleSessionCanSetTagKey,
+  roleSessionTagCapability,
+  type RoleSessionTagCapability
+} from './roleSessionTags.js'
 
 const kmsRetireGrantAction = 'kms:retiregrant'
 
@@ -417,7 +424,7 @@ async function simulateRequestInternal(
     service,
     simulationRequest.customContextKeys,
     principalArnForContext,
-    { includeResourceMetadata }
+    { includePrincipalTags: requiresCollectedPrincipal, includeResourceMetadata }
   )
 
   const vpcEndpointPolicy = await getVpcEndpointPolicy(collectClient, contextKeys)
@@ -436,14 +443,33 @@ async function simulateRequestInternal(
 
   await applyS3Settings(simulation, simulationRequest, variant, collectClient)
 
+  const sessionTagCapability = await sessionTagCapabilityForRequest(
+    collectClient,
+    simulationRequest,
+    principalArnForContext,
+    requiresCollectedPrincipal
+  )
+  const mutableExistingPrincipalTagKeys = mutableStoredPrincipalTagKeys(
+    sessionTagCapability,
+    contextKeys,
+    simulationRequest.customContextKeys
+  )
+  const principalTagsAreUnknown = variant === 'externalPrincipal' || variant === 'virtualPrincipal'
   const strictContextKeys = makeStrictContextKeys(
     simulationRequest,
     contextKeys,
     resourceTagsAreKnown,
-    isS3BucketOrObjectArn(simulationRequest.resourceArn || '')
+    isS3BucketOrObjectArn(simulationRequest.resourceArn || ''),
+    principalTagsAreUnknown,
+    sessionTagCapability,
+    mutableExistingPrincipalTagKeys
   )
-  const discoveryContextKeyConstraints = strictContextKeys.map((keyName) =>
-    discoveryConstraintForStrictKey(keyName, simulationRequest)
+  const discoveryContextKeyNames = new Set([
+    ...strictContextKeys,
+    ...mutableExistingPrincipalTagKeys
+  ])
+  const discoveryContextKeyConstraints = [...discoveryContextKeyNames].map((keyName) =>
+    discoveryConstraintForStrictKey(keyName, simulationRequest, mutableExistingPrincipalTagKeys)
   )
 
   const result = await runSimulation(simulation, {
@@ -642,13 +668,19 @@ async function applyS3Settings(
  * @param contextKeys generated and caller-provided context values
  * @param resourceTagsAreKnown whether all resource tags are known
  * @param s3BucketOrObjectRequest whether S3 bucket tag keys apply
+ * @param principalTagsAreUnknown whether synthetic principal tag presence and values are unknown
+ * @param sessionTagCapability trust-policy-derived role session-tag capability, when applicable
+ * @param mutablePrincipalTagKeys stored PrincipalTag keys whose values are not authoritative
  * @returns strict literal keys and key patterns
  */
 function makeStrictContextKeys(
   request: InternalSimulationRequest,
   contextKeys: ContextKeys,
   resourceTagsAreKnown: boolean,
-  s3BucketOrObjectRequest: boolean
+  s3BucketOrObjectRequest: boolean,
+  principalTagsAreUnknown: boolean,
+  sessionTagCapability: RoleSessionTagCapability | undefined,
+  mutablePrincipalTagKeys: ReadonlySet<string>
 ): string[] {
   const strictContextKeys = [...knownContextKeys, ...(request.additionalStrictContextKeys ?? [])]
 
@@ -662,6 +694,15 @@ function makeStrictContextKeys(
       strictContextKeys.push(CONTEXT_KEYS.assumedRoot)
     }
   }
+  if (!principalTagsAreUnknown && request.principal && isIamUserArn(request.principal)) {
+    strictContextKeys.push('/^aws:PrincipalTag\/.*/')
+  }
+  if (sessionTagCapability) {
+    const immutableTagPattern = immutablePrincipalTagPattern(sessionTagCapability)
+    if (immutableTagPattern) {
+      strictContextKeys.push(immutableTagPattern)
+    }
+  }
   if (request.action.startsWith('s3:')) {
     strictContextKeys.push('s3:DataAccessPointAccount', 's3:DataAccessPointArn')
   }
@@ -673,8 +714,15 @@ function makeStrictContextKeys(
       strictContextKeys.push('/^s3:BucketTag\/.*/')
     }
   }
+
+  // There also may be other tag context keys, so add those too. Mutable role tags must not
+  // receive a strict constraint because iam-simulate merges constraints with true-winning semantics.
   for (const key of Object.keys(contextKeys)) {
-    if (key.toLowerCase().includes('tag/')) {
+    if (
+      isTagContextKey(key) &&
+      !(principalTagsAreUnknown && isPrincipalTagContextKey(key)) &&
+      !mutablePrincipalTagKeys.has(key)
+    ) {
       strictContextKeys.push(key)
     }
   }
@@ -682,7 +730,39 @@ function makeStrictContextKeys(
   return strictContextKeys
 }
 
+/**
+ * Checks whether a context key's first slash-delimited namespace ends in `Tag`.
+ *
+ * @param key context-key name to inspect
+ * @returns true for tag context keys such as `aws:PrincipalTag/Department`
+ */
+function isTagContextKey(key: string): boolean {
+  const slashIndex = key.indexOf('/')
+  return (
+    slashIndex >= 3 &&
+    key
+      .slice(slashIndex - 3, slashIndex + 1)
+      .localeCompare('tag/', undefined, { sensitivity: 'base' }) === 0
+  )
+}
+
 const awsSourceKeyPrefix = 'aws:source'
+const awsPrincipalTagPrefix = 'aws:principaltag/'
+
+/**
+ * Checks whether a context key is in the PrincipalTag namespace.
+ *
+ * @param key context-key name to inspect
+ * @returns true when the key starts with `aws:PrincipalTag/`, ignoring case
+ */
+function isPrincipalTagContextKey(key: string): boolean {
+  return (
+    key
+      .slice(0, awsPrincipalTagPrefix.length)
+      .localeCompare(awsPrincipalTagPrefix, undefined, { sensitivity: 'base' }) === 0
+  )
+}
+
 const anonymousAbsentContextKeys = new Set([
   'aws:principalarn',
   'aws:principalaccount',
@@ -703,10 +783,90 @@ const anonymousAbsentContextKeys = new Set([
 ])
 
 /**
- * Convert an iam-lens strict context key into an iam-simulate Discovery constraint.
+ * Derives role session-tag capability independently from tags stored on the role.
+ *
+ * This lookup applies only to Discovery simulations for IAM roles and assumed-role sessions. IAM
+ * user tags are handled separately as fully strict because users cannot receive role-session tags.
+ *
+ * @param collectClient the collect client used to load the canonical role trust policy
+ * @param simulationRequest the request whose principal-tag certainty is being modeled
+ * @param resolvedPrincipalArnForContext the canonical role ARN resolved for an assumed-role session
+ * @param principalIsCollected whether absent principal metadata is authoritative
+ * @returns the role's session-tag capability, or undefined when role metadata is not applicable
+ */
+async function sessionTagCapabilityForRequest(
+  collectClient: IamCollectClient,
+  simulationRequest: InternalSimulationRequest,
+  resolvedPrincipalArnForContext: string | undefined,
+  principalIsCollected: boolean
+): Promise<RoleSessionTagCapability | undefined> {
+  if (simulationRequest.simulationMode !== 'Discovery' || !principalIsCollected) {
+    return undefined
+  }
+
+  const requestPrincipal = simulationRequest.principal
+  const roleArn =
+    requestPrincipal && isIamRoleArn(requestPrincipal)
+      ? requestPrincipal
+      : resolvedPrincipalArnForContext
+  if (!roleArn || !isIamRoleArn(roleArn)) {
+    return undefined
+  }
+
+  const accountId = splitArnParts(roleArn).accountId
+  if (!accountId) {
+    return undefined
+  }
+
+  const trustPolicy = await collectClient.getResourcePolicyForArn(roleArn, accountId)
+  return roleSessionTagCapability(trustPolicy)
+}
+
+/**
+ * Finds stored role-tag values that a session may override.
+ *
+ * Stored tags determine baseline presence, while the independent trust-policy capability determines
+ * mutability. A mutable stored tag is always present, but its effective session value is unknown.
+ *
+ * @param capability the role's session-tag capability, or undefined for non-role requests
+ * @param contextKeys generated and caller-provided request context
+ * @param customContextKeys authoritative caller-provided context values
+ * @returns existing non-custom PrincipalTag context-key names whose values are mutable
+ */
+function mutableStoredPrincipalTagKeys(
+  capability: RoleSessionTagCapability | undefined,
+  contextKeys: ContextKeys,
+  customContextKeys: ContextKeys
+): Set<string> {
+  if (!capability || capability.type === 'none') {
+    return new Set()
+  }
+
+  const storedPrincipalTagKeys = Object.keys(contextKeys).filter(
+    (key) => isPrincipalTagContextKey(key) && !hasCustomContextKey(customContextKeys, key)
+  )
+  if (capability.type === 'any') {
+    return new Set(storedPrincipalTagKeys)
+  }
+
+  return new Set(
+    storedPrincipalTagKeys.filter((key) => {
+      const tagKey = key.slice(awsPrincipalTagPrefix.length)
+      return roleSessionCanSetTagKey(capability, tagKey)
+    })
+  )
+}
+
+/**
+ * Convert an iam-lens context key into an iam-simulate Discovery constraint.
+ *
+ * Caller-provided and explicitly strict keys remain fully authoritative. A stored PrincipalTag
+ * whose role session may override it has known presence but an unknown value. All other input keys
+ * are strict and continue through the existing special-case handling.
  *
  * @param keyName the literal context key or slash-delimited key pattern
  * @param simulationRequest the normalized request whose context certainty is modeled
+ * @param mutablePrincipalTagKeys stored PrincipalTag keys whose values are non-authoritative
  * @returns the Discovery constraint to pass to iam-simulate
  * @internal
  */
@@ -714,11 +874,19 @@ export function discoveryConstraintForStrictKey(
   keyName: string,
   simulationRequest: Pick<
     InternalSimulationRequest,
-    'customContextKeys' | 'simulationMode' | 'principal'
-  >
+    'additionalStrictContextKeys' | 'customContextKeys' | 'simulationMode' | 'principal'
+  >,
+  mutablePrincipalTagKeys?: ReadonlySet<string>
 ): DiscoveryContextKeyConstraint {
-  if (hasCustomContextKey(simulationRequest.customContextKeys, keyName)) {
+  if (
+    hasCustomContextKey(simulationRequest.customContextKeys, keyName) ||
+    simulationRequest.additionalStrictContextKeys?.includes(keyName)
+  ) {
     return { keyName, presenceIsKnown: true, valueIsKnown: true }
+  }
+
+  if (mutablePrincipalTagKeys?.has(keyName)) {
+    return { keyName, presenceIsKnown: true, valueIsKnown: false }
   }
 
   if (

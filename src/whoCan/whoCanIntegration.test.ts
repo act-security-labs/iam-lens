@@ -3402,6 +3402,86 @@ const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
     }
   },
   {
+    name: 'role session-tag trust policies control PrincipalTag certainty',
+    simulationCounts: { withoutIndex: 7, withIndex: 7 },
+    description:
+      'Trust policies determine tag-key mutability independently from stored role tags. A passing Strict rerun remains unconditional, absent immutable tags deny access, absent mutable tags remain conditional, separate ForAll TagKeys Allows are unioned, and IAM user tags always remain strict.',
+    data: '3',
+    request: {
+      resource: 'arn:aws:s3:::conditional-bucket/report.txt',
+      actions: ['s3:GetObject'],
+      principalScope: {
+        principals: [
+          'arn:aws:iam::600000000001:role/static-tag-role',
+          'arn:aws:iam::600000000001:role/dynamic-tag-role',
+          'arn:aws:iam::600000000001:role/limited-tag-role',
+          'arn:aws:iam::600000000001:role/union-tag-role',
+          'arn:aws:iam::600000000001:role/absent-static-tag-role',
+          'arn:aws:iam::600000000001:role/absent-dynamic-tag-role',
+          'arn:aws:iam::600000000001:user/tagged-user'
+        ]
+      }
+    },
+    expected: {
+      who: [
+        {
+          action: 'GetObject',
+          principal: 'arn:aws:iam::600000000001:role/static-tag-role',
+          service: 's3',
+          level: 'read',
+          resourceType: 'object'
+        },
+        {
+          action: 'GetObject',
+          principal: 'arn:aws:iam::600000000001:role/dynamic-tag-role',
+          service: 's3',
+          level: 'read',
+          resourceType: 'object'
+        },
+        {
+          action: 'GetObject',
+          principal: 'arn:aws:iam::600000000001:role/limited-tag-role',
+          service: 's3',
+          level: 'read',
+          resourceType: 'object'
+        },
+        {
+          action: 'GetObject',
+          principal: 'arn:aws:iam::600000000001:role/union-tag-role',
+          service: 's3',
+          level: 'read',
+          resourceType: 'object'
+        },
+        {
+          action: 'GetObject',
+          principal: 'arn:aws:iam::600000000001:role/absent-dynamic-tag-role',
+          service: 's3',
+          level: 'read',
+          resourceType: 'object',
+          conditions: conditionExpression(
+            'StringEquals',
+            'aws:PrincipalTag/Department',
+            ['Engineering'],
+            resourceAllowSource('AllowEngineeringDepartment')
+          ),
+          ignoredConditions: ignoredAllowCondition(
+            'resource',
+            'StringEquals',
+            'aws:PrincipalTag/Department',
+            ['Engineering']
+          )
+        },
+        {
+          action: 'GetObject',
+          principal: 'arn:aws:iam::600000000001:user/tagged-user',
+          service: 's3',
+          level: 'read',
+          resourceType: 'object'
+        }
+      ]
+    }
+  },
+  {
     name: 'bucket policy Allow with NotResource — PrincipalArn filter narrows on resource outside excluded prefix',
     simulationCounts: { withoutIndex: 25, withIndex: 25 },
     description:

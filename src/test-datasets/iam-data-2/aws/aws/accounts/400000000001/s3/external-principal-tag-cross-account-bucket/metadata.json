@@ -1,0 +1,5 @@
+{
+  "name": "external-principal-tag-cross-account-bucket",
+  "region": "us-east-1",
+  "arn": "arn:aws:s3:::external-principal-tag-cross-account-bucket"
+}

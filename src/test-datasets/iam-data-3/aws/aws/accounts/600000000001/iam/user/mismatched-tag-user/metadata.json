@@ -1,0 +1,7 @@
+{
+  "arn": "arn:aws:iam::600000000001:user/mismatched-tag-user",
+  "name": "mismatched-tag-user",
+  "id": "AIDA0000MISMATCHUSER1",
+  "path": "/",
+  "created": "2025-01-01T00:00:00.000Z"
+}
