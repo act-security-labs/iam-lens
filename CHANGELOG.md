@@ -1,3 +1,10 @@
+## [0.1.167](https://github.com/act-security-labs/iam-lens/compare/v0.1.166...v0.1.167) (2026-10-09)
+
+
+### Features
+
+* model role session tag mutability ([#218](https://github.com/act-security-labs/iam-lens/issues/218)) ([89b46cf](https://github.com/act-security-labs/iam-lens/commit/89b46cf25b49607108caf2224e38839d9e4c1152))
+
 ## [0.1.166](https://github.com/act-security-labs/iam-lens/compare/v0.1.165...v0.1.166) (2026-10-07)
 
 
