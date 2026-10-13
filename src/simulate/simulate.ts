@@ -145,6 +145,14 @@ export interface ExternalResourceSimulationRequest extends Omit<SimulationReques
 }
 
 /**
+ * A simulation request for an uncollected resource whose organization controls should apply.
+ *
+ * This has the same contract as an external-resource request: a concrete resource ARN and an
+ * optional caller-supplied resource or trust policy replace the synthetic allow-all policy.
+ */
+export type VirtualResourceSimulationRequest = ExternalResourceSimulationRequest
+
+/**
  * The result of a simulation request, containing the normalized request and evaluation result.
  */
 export interface SimulateRequestResult {
@@ -163,7 +171,12 @@ export interface SimulateRequestResult {
  * Identifies which collected or synthetic policy sources apply to a simulation.
  */
 type SimulationVariant =
-  'normal' | 'anonymous' | 'externalPrincipal' | 'virtualPrincipal' | 'externalResource'
+  | 'normal'
+  | 'anonymous'
+  | 'externalPrincipal'
+  | 'virtualPrincipal'
+  | 'externalResource'
+  | 'virtualResource'
 
 /**
  * Normalized request shape shared by authenticated and anonymous orchestration.
@@ -180,7 +193,7 @@ export type InternalSimulationRequest = Omit<SimulationRequest, 'principal'> & {
   inlinePolicy?: Record<string, unknown>
 
   /**
-   * Caller-supplied external resource or trust policy.
+   * Caller-supplied external or virtual resource policy, or trust policy.
    */
   resourcePolicy?: Record<string, unknown>
 }
@@ -307,6 +320,27 @@ export async function simulateExternalResourceRequest(
 }
 
 /**
+ * Simulate a collected principal accessing an uncollected resource while applying organization
+ * controls for the resource's account.
+ *
+ * The resource receives the synthetic allow-all resource (or trust) policy of an external resource
+ * unless `resourcePolicy` replaces it, and its tags, metadata, and S3 settings are unknown. The RCP
+ * hierarchy captured for `resourceAccount`, or the account in `resourceArn` when no account is
+ * supplied, still applies. An account outside the collected organization data has none. Wildcard-only
+ * actions are unsupported.
+ *
+ * @param simulationRequest the virtual resource request and optional resource/trust policy
+ * @param collectClient the IAM collect client to use for principal-side and organization data access
+ * @returns the normalized request and simulation result
+ */
+export async function simulateVirtualResourceRequest(
+  simulationRequest: VirtualResourceSimulationRequest,
+  collectClient: IamCollectClient
+): Promise<SimulateRequestResult> {
+  return simulateRequestInternal({ ...simulationRequest }, 'virtualResource', collectClient)
+}
+
+/**
  * Assemble and run every simulation variant through one policy and context processing path.
  *
  * @param input the normalized caller input
@@ -345,14 +379,19 @@ async function simulateRequestInternal(
 
   if (
     actionDetails.isWildcardOnly &&
-    (variant === 'anonymous' || variant === 'externalPrincipal' || variant === 'externalResource')
+    (variant === 'anonymous' ||
+      variant === 'externalPrincipal' ||
+      variant === 'externalResource' ||
+      variant === 'virtualResource')
   ) {
     const variantName =
       variant === 'anonymous'
         ? 'Anonymous'
         : variant === 'externalPrincipal'
           ? 'External principal'
-          : 'External resource'
+          : variant === 'externalResource'
+            ? 'External resource'
+            : 'Virtual resource'
     throw new Error(`${variantName} simulations do not support wildcard-only actions.`)
   }
 
@@ -361,6 +400,18 @@ async function simulateRequestInternal(
   }
   if (variant === 'externalResource' && !simulationRequest.resourceArn) {
     throw new Error('External resource simulations require a concrete resource ARN.')
+  }
+  if (variant === 'virtualResource' && !simulationRequest.resourceArn) {
+    throw new Error('Virtual resource simulations require a concrete resource ARN.')
+  }
+  if (variant === 'virtualResource' && !simulationRequest.resourceAccount) {
+    const resourceAccount = splitArnParts(simulationRequest.resourceArn!).accountId
+    if (!resourceAccount) {
+      throw new Error(
+        `Virtual resource ${simulationRequest.resourceArn} must contain an account ID.`
+      )
+    }
+    simulationRequest.resourceAccount = resourceAccount
   }
 
   if (actionDetails.isWildcardOnly) {
@@ -380,7 +431,8 @@ async function simulateRequestInternal(
     throw new Error(`Unable to find account ID for resource ${simulationRequest.resourceArn}`)
   }
 
-  const requiresCollectedPrincipal = variant === 'normal' || variant === 'externalResource'
+  const requiresCollectedPrincipal =
+    variant === 'normal' || variant === 'externalResource' || variant === 'virtualResource'
   if (requiresCollectedPrincipal) {
     const principalFound = await principalExists(simulationRequest.principal!, collectClient)
     if (!principalFound) {
@@ -417,7 +469,7 @@ async function simulateRequestInternal(
   const principalArnForContext = simulationRequest.principal
     ? await resolvePrincipalArnForContext(collectClient, simulationRequest.principal)
     : undefined
-  const includeResourceMetadata = variant !== 'externalResource'
+  const includeResourceMetadata = variant !== 'externalResource' && variant !== 'virtualResource'
   const { contextKeys, resourceTagsAreKnown } = await createContextKeys(
     collectClient,
     simulationRequest,
@@ -583,6 +635,21 @@ async function resourcePoliciesForVariant(
     }
   }
 
+  if (variant === 'virtualResource') {
+    return {
+      resourcePolicy: externalResourcePolicy(request),
+      resourceControlPolicies: await getResourceControlPolicies(
+        collectClient,
+        request.action,
+        request.resourceArn,
+        request.resourceAccount,
+        request.principal,
+        actionIsWildcard,
+        principalAccountRcps
+      )
+    }
+  }
+
   return getResourcePolicies(
     collectClient,
     request.action,
@@ -636,7 +703,7 @@ async function applyS3Settings(
     return
   }
 
-  if (variant === 'externalResource') {
+  if (variant === 'externalResource' || variant === 'virtualResource') {
     simulation.additionalSettings = {
       s3: {
         bucketAbacEnabled: request.s3AbacOverride === 'enabled',
@@ -961,6 +1028,57 @@ async function getResourcePolicies(
     ? await getResourcePolicyForResource(collectClient, resourceArn, resourceAccount)
     : undefined
 
+  const resourceControlPolicies = await getResourceControlPolicies(
+    collectClient,
+    action,
+    resourceArn,
+    resourceAccount,
+    principalArn,
+    actionIsWildcard,
+    principalAccountRcps
+  )
+
+  if (AssumeRoleActions.has(action.toLowerCase()) && !resourcePolicy) {
+    throw new Error(
+      `Trust policy not found for resource ${resourceArn}. sts assume role actions require a trust policy.`
+    )
+  }
+
+  const useResourcePolicy =
+    resourceArn !== undefined && !(isIamRoleArn(resourceArn) && service.toLowerCase() === 'iam')
+
+  return {
+    resourcePolicy: useResourcePolicy ? resourcePolicy : undefined,
+    resourceControlPolicies
+  }
+}
+
+/**
+ * Retrieve the RCP hierarchies applicable to a request from the resource account's organization
+ * placement, or from the principal account for a wildcard-only action.
+ *
+ * This applies the non-variant RCP rules for wildcard-only actions, service-linked roles,
+ * `kms:RetireGrant`, AWS-managed KMS keys, and the implicit full-access RCP. An account outside the
+ * collected organization data has no RCPs.
+ *
+ * @param collectClient the data client
+ * @param action the action being simulated
+ * @param resourceArn the resource ARN
+ * @param resourceAccount the resource account
+ * @param principalArn the authenticated principal ARN, when present
+ * @param actionIsWildcard whether the action uses the account-wide wildcard resource
+ * @param principalAccountRcps RCP hierarchy for the principal account
+ * @returns the filtered RCP hierarchies applicable to the request
+ */
+async function getResourceControlPolicies(
+  collectClient: IamCollectClient,
+  action: string,
+  resourceArn: string | undefined,
+  resourceAccount: string | undefined,
+  principalArn: string | undefined,
+  actionIsWildcard: boolean,
+  principalAccountRcps: SimulationOrgPolicies[]
+): Promise<SimulationOrgPolicies[]> {
   // AWS does not apply RCPs when a service principal assumes a service-linked role.
   const servicePrincipalAssumesServiceLinkedRole =
     principalArn !== undefined &&
@@ -992,24 +1110,12 @@ async function getResourcePolicies(
         ? principalAccountRcps
         : resourceRcps
 
-  if (AssumeRoleActions.has(action.toLowerCase()) && !resourcePolicy) {
-    throw new Error(
-      `Trust policy not found for resource ${resourceArn}. sts assume role actions require a trust policy.`
+  return applicableRcps.map((rcp) => ({
+    orgIdentifier: rcp.orgIdentifier,
+    policies: rcp.policies.filter(
+      (policy) => !policy.name.toLowerCase().endsWith('rcpfullawsaccess')
     )
-  }
-
-  const useResourcePolicy =
-    resourceArn !== undefined && !(isIamRoleArn(resourceArn) && service.toLowerCase() === 'iam')
-
-  return {
-    resourcePolicy: useResourcePolicy ? resourcePolicy : undefined,
-    resourceControlPolicies: applicableRcps.map((rcp) => ({
-      orgIdentifier: rcp.orgIdentifier,
-      policies: rcp.policies.filter(
-        (policy) => !policy.name.toLowerCase().endsWith('rcpfullawsaccess')
-      )
-    }))
-  }
+  }))
 }
 
 /**

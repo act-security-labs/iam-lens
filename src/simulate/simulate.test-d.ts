@@ -1,11 +1,13 @@
 import type { RunSimulationResults, Simulation } from '@actsecurity/iam-simulate'
 import { describe, expectTypeOf, it } from 'vitest'
+import { simulateVirtualResourceRequest } from './simulate.js'
 import type {
   AnonymousSimulationRequest,
   ExternalResourceSimulationRequest,
   SimulateRequestResult,
   SimulationRequest,
-  VirtualPrincipalSimulationRequest
+  VirtualPrincipalSimulationRequest,
+  VirtualResourceSimulationRequest
 } from './simulate.js'
 
 describe('simulation request type contracts', () => {
@@ -36,5 +38,12 @@ describe('simulation request type contracts', () => {
     expectTypeOf<ExternalResourceSimulationRequest['resourcePolicy']>().toEqualTypeOf<
       Record<string, unknown> | undefined
     >()
+  })
+
+  it('should use the external resource contract for virtual resources', () => {
+    expectTypeOf<
+      Parameters<typeof simulateVirtualResourceRequest>[0]
+    >().toEqualTypeOf<VirtualResourceSimulationRequest>()
+    expectTypeOf<VirtualResourceSimulationRequest>().toEqualTypeOf<ExternalResourceSimulationRequest>()
   })
 })
