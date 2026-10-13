@@ -28,10 +28,12 @@ export {
   simulateExternalPrincipalRequest,
   simulateVirtualPrincipal,
   simulateExternalResourceRequest,
+  simulateVirtualResourceRequest,
   type SimulationRequest,
   type AnonymousSimulationRequest,
   type VirtualPrincipalSimulationRequest,
   type ExternalResourceSimulationRequest,
+  type VirtualResourceSimulationRequest,
   type SimulateRequestResult
 } from './simulate/simulate.js'
 export {

@@ -5,8 +5,11 @@ import { saveRole, saveUser } from '../utils/testUtils.js'
 import {
   discoveryConstraintForStrictKey,
   resultMatchesExpectation,
+  simulateExternalResourceRequest,
   simulateRequest,
-  type SimulationRequest
+  simulateVirtualResourceRequest,
+  type SimulationRequest,
+  type VirtualResourceSimulationRequest
 } from './simulate.js'
 
 describe('simulateRequest', () => {
@@ -409,6 +412,33 @@ describe('simulateRequest', () => {
         message: 'One of Principal or NotPrincipal is required in a trust policy'
       }
     ])
+  })
+
+  it('should reject an assume-role request to a collected role without a trust policy', async () => {
+    //Given a collected caller and a collected target role that has no stored trust policy
+    const { store, client } = testStore()
+    const principalArn = 'arn:aws:iam::123456789012:user/test-user'
+    const roleArn = 'arn:aws:iam::123456789012:role/NoTrustPolicyRole'
+    await saveUser(store, { arn: principalArn })
+    await saveRole(store, { arn: roleArn })
+
+    //When simulating sts:AssumeRole against the role
+    const simulation = simulateRequest(
+      {
+        simulationMode: 'Strict',
+        principal: principalArn,
+        resourceArn: roleArn,
+        resourceAccount: '123456789012',
+        action: 'sts:AssumeRole',
+        customContextKeys: {}
+      },
+      client
+    )
+
+    //Then the missing trust policy is rejected before policy evaluation
+    await expect(simulation).rejects.toThrow(
+      `Trust policy not found for resource ${roleArn}. sts assume role actions require a trust policy.`
+    )
   })
 })
 
@@ -1318,5 +1348,238 @@ describe('resultMatchesExpectation', () => {
 
     // Then it should return true
     expect(result).toBe(true)
+  })
+})
+
+describe('simulateVirtualResourceRequest', () => {
+  const orgId = 'o-virtualres'
+  const managementAccountId = '100000000000'
+  const principalAccountId = '123456789012'
+  const memberAccountId = '210987654321'
+  const workloadsOuId = 'ou-virtualres-workloads'
+  const principalArn = `arn:aws:iam::${principalAccountId}:role/Reader`
+  const objectArn = (resourceAccount: string) =>
+    `arn:aws:kms:us-east-1:${resourceAccount}:key/uncollected-key`
+  const denyReadRcpArn = `arn:aws:organizations::${managementAccountId}:policy/${orgId}/resource_control_policy/p-deny-kms-describe`
+
+  /**
+   * Store a collected reader role and an organization whose workloads OU denies KMS key descriptions through an
+   * RCP. The member account is placed in that OU but has no collected resources.
+   *
+   * @returns the in-memory collect client for the scenario
+   */
+  async function organizationWithOuRcp() {
+    const { store, client } = testStore()
+    await saveRole(store, {
+      arn: principalArn,
+      inlinePolicies: [
+        {
+          PolicyName: 'ReadObjects',
+          PolicyDocument: {
+            Version: '2012-10-17',
+            Statement: { Effect: 'Allow', Action: 'kms:DescribeKey', Resource: '*' }
+          }
+        }
+      ]
+    })
+    await store.saveIndex(
+      'accounts-to-orgs',
+      { [managementAccountId]: orgId, [memberAccountId]: orgId },
+      ''
+    )
+    await store.saveOrganizationMetadata(orgId, 'metadata', {
+      rootAccountId: managementAccountId
+    })
+    await store.saveOrganizationMetadata(orgId, 'ous', {
+      'r-virtualres': { rcps: [] },
+      [workloadsOuId]: { parent: 'r-virtualres', rcps: [denyReadRcpArn] }
+    })
+    await store.saveOrganizationMetadata(orgId, 'accounts', {
+      [managementAccountId]: { ou: 'r-virtualres', rcps: [] },
+      [memberAccountId]: { ou: workloadsOuId, rcps: [] }
+    })
+    await store.saveOrganizationPolicyMetadata(orgId, 'rcps', 'p-deny-kms-describe', 'metadata', {
+      arn: denyReadRcpArn,
+      name: 'DenyKmsDescribe'
+    })
+    await store.saveOrganizationPolicyMetadata(orgId, 'rcps', 'p-deny-kms-describe', 'policy', {
+      Version: '2012-10-17',
+      Statement: {
+        Sid: 'DenyKmsDescribe',
+        Effect: 'Deny',
+        Principal: '*',
+        Action: 'kms:DescribeKey',
+        Resource: '*'
+      }
+    })
+    return client
+  }
+
+  /**
+   * Build a virtual-resource read request for the scenario's reader role.
+   *
+   * @param resourceAccount the account encoded in the uncollected resource ARN
+   * @returns the virtual-resource request
+   */
+  function readRequest(resourceAccount: string): VirtualResourceSimulationRequest {
+    return {
+      simulationMode: 'Strict',
+      principal: principalArn,
+      resourceArn: objectArn(resourceAccount),
+      resourceAccount: undefined,
+      action: 'kms:DescribeKey',
+      customContextKeys: {}
+    }
+  }
+
+  it('should apply an RCP on the OU of the uncollected resource account', async () => {
+    //Given an uncollected object in a member account whose OU has a deny RCP
+    const client = await organizationWithOuRcp()
+
+    //When simulating the read as a virtual resource
+    const { result } = await simulateVirtualResourceRequest(readRequest(memberAccountId), client)
+
+    //Then the OU RCP explicitly denies the request
+    if (result.resultType !== 'single') {
+      assert.fail(`Expected a single result, got ${result.resultType}`)
+    }
+    expect(result.overallResult).toEqual('ExplicitlyDenied')
+    expect(result.result.analysis.rcpAnalysis?.result).toEqual('ExplicitlyDenied')
+    expect(result.result.analysis.resourceAnalysis?.result).toEqual('Allowed')
+  })
+
+  it('should allow the same request as an external resource, which applies no RCPs', async () => {
+    //Given the same uncollected object in a member account whose OU has a deny RCP
+    const client = await organizationWithOuRcp()
+
+    //When simulating the read as an external resource
+    const { result } = await simulateExternalResourceRequest(
+      { ...readRequest(memberAccountId), resourceAccount: memberAccountId },
+      client
+    )
+
+    //Then the OU RCP is ignored and the synthetic resource policy allows the request
+    if (result.resultType !== 'single') {
+      assert.fail(`Expected a single result, got ${result.resultType}`)
+    }
+    expect(result.overallResult).toEqual('Allowed')
+  })
+
+  it('should apply no RCPs when the resource account is outside the organization data', async () => {
+    //Given an uncollected object in an account absent from accounts-to-orgs
+    const client = await organizationWithOuRcp()
+    const outsideAccountId = '555555555555'
+    const rcpHierarchySpy = vi.spyOn(client, 'getRcpHierarchyForAccount')
+
+    //When simulating the read as a virtual resource
+    const { result } = await simulateVirtualResourceRequest(readRequest(outsideAccountId), client)
+
+    //Then the account's empty RCP hierarchy lets the request through
+    if (result.resultType !== 'single') {
+      assert.fail(`Expected a single result, got ${result.resultType}`)
+    }
+    expect(result.overallResult).toEqual('Allowed')
+    expect(rcpHierarchySpy).toHaveBeenCalledWith(outsideAccountId)
+    await expect(client.getRcpHierarchyForAccount(outsideAccountId)).resolves.toEqual([])
+  })
+
+  it('should not apply the OU RCP to a service-linked role principal', async () => {
+    //Given a collected service-linked role that may read objects and the OU deny RCP
+    const client = await organizationWithOuRcp()
+    const serviceLinkedRoleArn = `arn:aws:iam::${principalAccountId}:role/aws-service-role/example.amazonaws.com/AWSServiceRoleForExample`
+    await saveRole(client.getStore(), {
+      arn: serviceLinkedRoleArn,
+      inlinePolicies: [
+        {
+          PolicyName: 'ReadObjects',
+          PolicyDocument: {
+            Version: '2012-10-17',
+            Statement: { Effect: 'Allow', Action: 'kms:DescribeKey', Resource: '*' }
+          }
+        }
+      ]
+    })
+
+    //When the service-linked role reads the virtual resource
+    const { result } = await simulateVirtualResourceRequest(
+      { ...readRequest(memberAccountId), principal: serviceLinkedRoleArn },
+      client
+    )
+
+    //Then RCPs do not apply and the request is allowed
+    if (result.resultType !== 'single') {
+      assert.fail(`Expected a single result, got ${result.resultType}`)
+    }
+    expect(result.overallResult).toEqual('Allowed')
+  })
+
+  it('should prefer a supplied resource account over the ARN account', async () => {
+    //Given an ARN for an account with an RCP deny and a supplied outside-organization account
+    const client = await organizationWithOuRcp()
+    const outsideAccountId = '555555555555'
+    const request = { ...readRequest(memberAccountId), resourceAccount: outsideAccountId }
+
+    //When simulating the virtual resource
+    const { request: normalizedRequest, result } = await simulateVirtualResourceRequest(
+      request,
+      client
+    )
+
+    //Then the supplied account selects no RCPs rather than the account in the ARN
+    if (result.resultType !== 'single') {
+      assert.fail(`Expected a single result, got ${result.resultType}`)
+    }
+    expect(normalizedRequest.resource.accountId).toBe(outsideAccountId)
+    expect(result.overallResult).toEqual('Allowed')
+  })
+
+  it('should reject a resource ARN without an account ID', async () => {
+    //Given a virtual-resource request whose ARN has no account segment
+    const client = await organizationWithOuRcp()
+    const request = {
+      ...readRequest(memberAccountId),
+      resourceArn: 'arn:aws:s3:::key/uncollected-key'
+    }
+
+    //When simulating the request
+    const simulation = simulateVirtualResourceRequest(request, client)
+
+    //Then the request is rejected before policy evaluation
+    await expect(simulation).rejects.toThrow(
+      'Virtual resource arn:aws:s3:::key/uncollected-key must contain an account ID.'
+    )
+  })
+
+  it('should reject a wildcard-only action, as the external resource variant does', async () => {
+    //Given a wildcard-only action against a concrete resource
+    const client = await organizationWithOuRcp()
+    const request = { ...readRequest(memberAccountId), action: 'iam:ListUsers' }
+
+    //When simulating the request as a virtual and as an external resource
+    const virtual = simulateVirtualResourceRequest(request, client)
+    const external = simulateExternalResourceRequest(request, client)
+
+    //Then both resource-side variants reject it
+    await expect(virtual).rejects.toThrow(
+      'Virtual resource simulations do not support wildcard-only actions.'
+    )
+    await expect(external).rejects.toThrow(
+      'External resource simulations do not support wildcard-only actions.'
+    )
+  })
+
+  it('should reject a principal that is not collected', async () => {
+    //Given a virtual-resource request from a principal absent from the collected data
+    const client = await organizationWithOuRcp()
+    const request = {
+      ...readRequest(memberAccountId),
+      principal: `arn:aws:iam::${principalAccountId}:role/Uncollected`
+    }
+
+    //When simulating the request
+    const simulation = simulateVirtualResourceRequest(request, client)
+
+    //Then the collected-principal requirement is enforced
+    await expect(simulation).rejects.toThrow(/does not exist/)
   })
 })
