@@ -1,3 +1,10 @@
+## [0.1.169](https://github.com/act-security-labs/iam-lens/compare/v0.1.168...v0.1.169) (2026-10-13)
+
+
+### Features
+
+* add virtual resource simulation ([#221](https://github.com/act-security-labs/iam-lens/issues/221)) ([77584da](https://github.com/act-security-labs/iam-lens/commit/77584da24989125d0d2cdd449683dd2f6813f659))
+
 ## [0.1.168](https://github.com/act-security-labs/iam-lens/compare/v0.1.167...v0.1.168) (2026-10-09)
 
 
