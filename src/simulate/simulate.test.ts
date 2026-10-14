@@ -4,6 +4,7 @@ import { testStore } from '../collect/inMemoryClient.js'
 import { saveRole, saveUser } from '../utils/testUtils.js'
 import {
   discoveryConstraintForStrictKey,
+  mergeDiscoveryContextKeyConstraints,
   resultMatchesExpectation,
   simulateExternalResourceRequest,
   simulateRequest,
@@ -1302,6 +1303,49 @@ describe('caller-provided Discovery context keys', () => {
 
     //Then explicit strictness keeps its presence and value authoritative
     expect(constraint).toEqual({ keyName, presenceIsKnown: true, valueIsKnown: true })
+  })
+})
+
+describe('mergeDiscoveryContextKeyConstraints', () => {
+  it('should replace matching generated literal and regex constraints case-insensitively', () => {
+    //Given generated literal and regex constraints with matching caller overrides
+    const generatedConstraints = [
+      { keyName: 'aws:SourceVpc', presenceIsKnown: true, valueIsKnown: true },
+      { keyName: '/^aws:PrincipalTag\\/.*/', presenceIsKnown: true, valueIsKnown: true },
+      { keyName: 'aws:SecureTransport', presenceIsKnown: true, valueIsKnown: true }
+    ] as const
+    const callerConstraints = [
+      { keyName: 'AWS:sourcevpc', presenceIsKnown: true, valueIsKnown: false },
+      { keyName: '/^AWS:PrincipalTag\\/.*/', presenceIsKnown: false, valueIsKnown: false }
+    ] as const
+
+    //When constraints are merged
+    const result = mergeDiscoveryContextKeyConstraints(
+      [...generatedConstraints],
+      [...callerConstraints]
+    )
+
+    //Then caller constraints should precede remaining generated constraints
+    expect(result).toEqual([
+      ...callerConstraints,
+      { keyName: 'aws:SecureTransport', presenceIsKnown: true, valueIsKnown: true }
+    ])
+  })
+
+  it('should retain a generated regex when the caller constraint has different text', () => {
+    //Given a generated tag pattern and a caller literal that would match that pattern
+    const generatedConstraints = [
+      { keyName: '/^aws:ResourceTag\\/.*/', presenceIsKnown: true, valueIsKnown: true }
+    ]
+    const callerConstraints = [
+      { keyName: 'AWS:ResourceTag/Environment', presenceIsKnown: false, valueIsKnown: false }
+    ]
+
+    //When constraints are merged
+    const result = mergeDiscoveryContextKeyConstraints(generatedConstraints, callerConstraints)
+
+    //Then lexical matching should retain the different generated pattern after the caller constraint
+    expect(result).toEqual([...callerConstraints, ...generatedConstraints])
   })
 })
 

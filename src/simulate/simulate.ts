@@ -99,6 +99,13 @@ export interface SimulationRequest {
    * Additional strict context keys to include for the simulation. These will be added to the default strict context keys.
    */
   additionalStrictContextKeys?: string[]
+
+  /**
+   * Caller-provided Discovery-only knowledge constraints. Matching caller
+   * constraints override iam-lens-generated constraints case-insensitively;
+   * iam-simulate ignores them in Strict mode.
+   */
+  discoveryContextKeyConstraints?: DiscoveryContextKeyConstraint[]
 }
 
 /**
@@ -520,8 +527,12 @@ async function simulateRequestInternal(
     ...strictContextKeys,
     ...mutableExistingPrincipalTagKeys
   ])
-  const discoveryContextKeyConstraints = [...discoveryContextKeyNames].map((keyName) =>
+  const generatedDiscoveryContextKeyConstraints = [...discoveryContextKeyNames].map((keyName) =>
     discoveryConstraintForStrictKey(keyName, simulationRequest, mutableExistingPrincipalTagKeys)
+  )
+  const discoveryContextKeyConstraints = mergeDiscoveryContextKeyConstraints(
+    generatedDiscoveryContextKeyConstraints,
+    simulationRequest.discoveryContextKeyConstraints ?? []
   )
 
   const result = await runSimulation(simulation, {
@@ -921,6 +932,47 @@ function mutableStoredPrincipalTagKeys(
       return roleSessionCanSetTagKey(capability, tagKey)
     })
   )
+}
+
+/**
+ * Merge iam-lens-generated and caller-provided Discovery constraints.
+ *
+ * Caller constraints replace generated constraints with the same key-name
+ * string, compared case-insensitively. Regex patterns are compared as strings;
+ * regex-overlap precedence can be added later without changing the public
+ * request contract.
+ *
+ * @param generatedConstraints constraints derived from iam-lens request context
+ * @param callerConstraints constraints supplied by the simulation caller
+ * @returns caller constraints followed by generated constraints not overridden by callers
+ * @internal
+ */
+export function mergeDiscoveryContextKeyConstraints(
+  generatedConstraints: DiscoveryContextKeyConstraint[],
+  callerConstraints: DiscoveryContextKeyConstraint[]
+): DiscoveryContextKeyConstraint[] {
+  return [
+    ...callerConstraints,
+    ...generatedConstraints.filter((generatedConstraint) => {
+      return !callerConstraints.some((callerConstraint) => {
+        return constraintKeyNamesMatch(callerConstraint.keyName, generatedConstraint.keyName)
+      })
+    })
+  ]
+}
+
+/**
+ * Determine whether caller and generated constraint key names match.
+ *
+ * The comparison is intentionally lexical: literal names and slash-delimited
+ * regex patterns are both compared as strings with case-insensitive matching.
+ *
+ * @param callerKeyName caller-provided literal key name or slash-delimited regex pattern
+ * @param generatedKeyName iam-lens-generated literal key name or slash-delimited regex pattern
+ * @returns whether the caller constraint overrides the generated constraint
+ */
+function constraintKeyNamesMatch(callerKeyName: string, generatedKeyName: string): boolean {
+  return callerKeyName.localeCompare(generatedKeyName, undefined, { sensitivity: 'base' }) === 0
 }
 
 /**
