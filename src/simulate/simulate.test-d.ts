@@ -1,4 +1,8 @@
-import type { RunSimulationResults, Simulation } from '@actsecurity/iam-simulate'
+import type {
+  DiscoveryContextKeyConstraint,
+  RunSimulationResults,
+  Simulation
+} from '@actsecurity/iam-simulate'
 import { describe, expectTypeOf, it } from 'vitest'
 import { simulateVirtualResourceRequest } from './simulate.js'
 import type {
@@ -18,6 +22,12 @@ describe('simulation request type contracts', () => {
 
   it('should remove the legacy ignoreMissingPrincipal option', () => {
     expectTypeOf<SimulationRequest>().not.toHaveProperty('ignoreMissingPrincipal')
+  })
+
+  it('should accept iam-simulate Discovery context-key constraints', () => {
+    expectTypeOf<SimulationRequest['discoveryContextKeyConstraints']>().toEqualTypeOf<
+      DiscoveryContextKeyConstraint[] | undefined
+    >()
   })
 
   it('should omit principal and session policy from anonymous requests', () => {

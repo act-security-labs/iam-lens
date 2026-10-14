@@ -403,6 +403,167 @@ const simulateIntegrationTest: {
     expected: 'ImplicitlyDenied'
   },
   {
+    name: 'caller known-value constraint preserves a mismatching custom context value',
+    comment:
+      'The caller marks an alternate-case SourceVpc key as fully known, so the mismatching custom value remains authoritative and the conditional Allow does not apply.',
+    data: '1',
+    request: {
+      resourceArn: 'arn:aws:s3:::vpc-bucket',
+      resourceAccount: undefined,
+      action: 's3:ListBucket',
+      principal: 'arn:aws:iam::200000000002:role/VpcBucketRole',
+      customContextKeys: { 'aws:SourceVpc': 'vpc-not-allowed' },
+      simulationMode: 'Discovery',
+      discoveryContextKeyConstraints: [
+        { keyName: 'AWS:sourcevpc', presenceIsKnown: true, valueIsKnown: true }
+      ]
+    },
+    expected: 'ImplicitlyDenied'
+  },
+  {
+    name: 'caller unknown-value constraint overrides a known custom context value',
+    comment:
+      'The caller keeps SourceVpc presence known but declares its mismatching custom value non-authoritative, so Discovery returns the conditional Allow.',
+    data: '1',
+    request: {
+      resourceArn: 'arn:aws:s3:::vpc-bucket',
+      resourceAccount: undefined,
+      action: 's3:ListBucket',
+      principal: 'arn:aws:iam::200000000002:role/VpcBucketRole',
+      customContextKeys: { 'aws:SourceVpc': 'vpc-not-allowed' },
+      simulationMode: 'Discovery',
+      discoveryContextKeyConstraints: [
+        { keyName: 'AWS:sourcevpc', presenceIsKnown: true, valueIsKnown: false }
+      ]
+    },
+    expected: 'Allowed'
+  },
+  {
+    name: 'caller unknown-presence constraint overrides a known custom context value',
+    comment:
+      'The caller declares both SourceVpc presence and value non-authoritative, so Discovery returns the conditional Allow despite the mismatching custom value.',
+    data: '1',
+    request: {
+      resourceArn: 'arn:aws:s3:::vpc-bucket',
+      resourceAccount: undefined,
+      action: 's3:ListBucket',
+      principal: 'arn:aws:iam::200000000002:role/VpcBucketRole',
+      customContextKeys: { 'aws:SourceVpc': 'vpc-not-allowed' },
+      simulationMode: 'Discovery',
+      discoveryContextKeyConstraints: [
+        { keyName: 'AWS:sourcevpc', presenceIsKnown: false, valueIsKnown: false }
+      ]
+    },
+    expected: 'Allowed'
+  },
+  {
+    name: 'caller can model a present s3:authType with an unknown value',
+    comment:
+      'The placeholder custom values establish both keys as present. The caller marks only authType non-authoritative, so its nonmatching condition remains a conditional Allow while the TLS condition is denied.',
+    data: '1',
+    request: {
+      resourceArn: 'arn:aws:s3:::context-key-bucket',
+      resourceAccount: '200000000002',
+      action: 's3:ListBucket',
+      principal: 'arn:aws:iam::200000000002:role/VpcBucketRole',
+      customContextKeys: {
+        's3:authType': 'placeholder-auth-type',
+        's3:TlsVersion': '1.1'
+      },
+      simulationMode: 'Discovery',
+      discoveryContextKeyConstraints: [
+        { keyName: 's3:authType', presenceIsKnown: true, valueIsKnown: false }
+      ]
+    },
+    expected: 'Allowed',
+    expectedConditions: {
+      conditionType: 'condition',
+      op: 'StringEquals',
+      key: 's3:authType',
+      values: ['REST-HEADER'],
+      sources: [
+        {
+          effect: 'Allow',
+          policyIdentifier: 'arn:aws:iam::200000000002:role/VpcBucketRole#ListBucket',
+          policyType: 'identity',
+          statementIndex: 2
+        }
+      ]
+    }
+  },
+  {
+    name: 'caller can model a present s3:TlsVersion with an unknown value',
+    comment:
+      'The placeholder custom values establish both keys as present. The caller marks only TlsVersion non-authoritative, so its nonmatching condition remains a conditional Allow while the authType condition is denied.',
+    data: '1',
+    request: {
+      resourceArn: 'arn:aws:s3:::context-key-bucket',
+      resourceAccount: '200000000002',
+      action: 's3:ListBucket',
+      principal: 'arn:aws:iam::200000000002:role/VpcBucketRole',
+      customContextKeys: {
+        's3:authType': 'placeholder-auth-type',
+        's3:TlsVersion': '1.1'
+      },
+      simulationMode: 'Discovery',
+      discoveryContextKeyConstraints: [
+        { keyName: 's3:TlsVersion', presenceIsKnown: true, valueIsKnown: false }
+      ]
+    },
+    expected: 'Allowed',
+    expectedConditions: {
+      conditionType: 'condition',
+      op: 'NumericGreaterThanEquals',
+      key: 's3:TlsVersion',
+      values: ['1.2'],
+      sources: [
+        {
+          effect: 'Allow',
+          policyIdentifier: 'arn:aws:iam::200000000002:role/VpcBucketRole#ListBucket',
+          policyType: 'identity',
+          statementIndex: 3
+        }
+      ]
+    }
+  },
+  {
+    name: 'known presence allows a Null false condition when authType value is unknown',
+    comment:
+      'The custom placeholder establishes authType presence while the caller marks its value unknown. Null false only depends on presence, so the Allow applies without a conditional result.',
+    data: '1',
+    request: {
+      resourceArn: 'arn:aws:s3:::context-key-present-bucket',
+      resourceAccount: '200000000002',
+      action: 's3:ListBucket',
+      principal: 'arn:aws:iam::200000000002:role/VpcBucketRole',
+      customContextKeys: { 's3:authType': 'placeholder-auth-type' },
+      simulationMode: 'Discovery',
+      discoveryContextKeyConstraints: [
+        { keyName: 's3:authType', presenceIsKnown: true, valueIsKnown: false }
+      ]
+    },
+    expected: 'Allowed',
+    expectedConditions: undefined
+  },
+  {
+    name: 'known presence rejects a Null true condition when TlsVersion value is unknown',
+    comment:
+      'The custom placeholder establishes TlsVersion presence while the caller marks its value unknown. Null true only depends on absence, so the Allow does not apply.',
+    data: '1',
+    request: {
+      resourceArn: 'arn:aws:s3:::context-key-absent-bucket',
+      resourceAccount: '200000000002',
+      action: 's3:ListBucket',
+      principal: 'arn:aws:iam::200000000002:role/VpcBucketRole',
+      customContextKeys: { 's3:TlsVersion': '1.1' },
+      simulationMode: 'Discovery',
+      discoveryContextKeyConstraints: [
+        { keyName: 's3:TlsVersion', presenceIsKnown: true, valueIsKnown: false }
+      ]
+    },
+    expected: 'ImplicitlyDenied'
+  },
+  {
     name: 'resource policy Deny with aws:SourceArn treats presence as known and value as unknown',
     comment:
       'The role has an identity Allow for s3:PutObject, but the bucket policy has a Deny gated by ArnNotEquals aws:SourceArn. SourceArn is absent for an IAM principal request, so the negated condition matches and the explicit Deny applies.',

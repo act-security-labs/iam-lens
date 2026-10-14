@@ -13,6 +13,46 @@
               "aws:SourceVpc": "vpc-123456789"
             }
           }
+        },
+        {
+          "Effect": "Allow",
+          "Action": ["s3:ListBucket"],
+          "Resource": ["arn:aws:s3:::context-key-bucket"],
+          "Condition": {
+            "StringEquals": {
+              "s3:authType": "REST-HEADER"
+            }
+          }
+        },
+        {
+          "Effect": "Allow",
+          "Action": ["s3:ListBucket"],
+          "Resource": ["arn:aws:s3:::context-key-bucket"],
+          "Condition": {
+            "NumericGreaterThanEquals": {
+              "s3:TlsVersion": "1.2"
+            }
+          }
+        },
+        {
+          "Effect": "Allow",
+          "Action": ["s3:ListBucket"],
+          "Resource": ["arn:aws:s3:::context-key-present-bucket"],
+          "Condition": {
+            "Null": {
+              "s3:authType": "false"
+            }
+          }
+        },
+        {
+          "Effect": "Allow",
+          "Action": ["s3:ListBucket"],
+          "Resource": ["arn:aws:s3:::context-key-absent-bucket"],
+          "Condition": {
+            "Null": {
+              "s3:TlsVersion": "true"
+            }
+          }
         }
       ]
     }
