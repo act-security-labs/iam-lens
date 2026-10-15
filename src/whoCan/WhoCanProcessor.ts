@@ -1,3 +1,4 @@
+import { iamActionDetails } from '@actsecurity/iam-data'
 import { type TopLevelConfig } from '@actsecurity/iam-collect'
 import { type ValidatedPolicy } from '@actsecurity/iam-policy'
 import { type JobResult, numberOfCpus, StreamingJobQueue } from '@actsecurity/job'
@@ -926,6 +927,27 @@ export class WhoCanProcessor {
       collectClient
     )
 
+    // An empty scope excludes anonymous too; a supplied scope must explicitly opt in.
+    const anonymousInScope = !request.principalScope || request.principalScope.anonymous === true
+    if (resource && accountsToCheck.checkAnonymous && anonymousInScope) {
+      for (const action of new Set(actions)) {
+        const [service, actionName] = action.split(':')
+        if ((await iamActionDetails(service, actionName)).isWildcardOnly) {
+          continue
+        }
+        state.scenarios.enqueue({
+          simulationVariant: 'anonymous',
+          principal: 'anonymous',
+          resource,
+          resourceAccount,
+          action,
+          strictContextKeys: request.strictContextKeys,
+          collectDenyDetails: !!state.denyDetailsCallback
+        })
+        state.created++
+      }
+    }
+
     const principalArnFilter = buildPrincipalArnFilter(resourcePolicy)
     const uniqueAccounts = await uniqueAccountsToCheck(collectClient, accountsToCheck)
 
@@ -1012,6 +1034,7 @@ export class WhoCanProcessor {
                   continue
                 }
                 state.scenarios.enqueue({
+                  simulationVariant: 'authenticated',
                   resource,
                   action,
                   principal,
@@ -1054,6 +1077,7 @@ export class WhoCanProcessor {
                     continue
                   }
                   state.scenarios.enqueue({
+                    simulationVariant: 'authenticated',
                     resource,
                     action,
                     principal,
@@ -1092,6 +1116,7 @@ export class WhoCanProcessor {
             if (isServicePrincipal(principal)) {
               for (const action of actions) {
                 state.scenarios.enqueue({
+                  simulationVariant: 'authenticated',
                   resource,
                   action,
                   principal,
@@ -1112,6 +1137,7 @@ export class WhoCanProcessor {
               } else {
                 for (const action of actions) {
                   state.scenarios.enqueue({
+                    simulationVariant: 'authenticated',
                     resource,
                     action,
                     principal,

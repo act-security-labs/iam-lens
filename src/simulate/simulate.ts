@@ -109,7 +109,7 @@ export interface SimulationRequest {
 }
 
 /**
- * An unsigned simulation request against a concrete resource ARN.
+ * An unsigned simulation request against a resource ARN or resource pattern.
  * Anonymous requests have no identity, session, permission-boundary, or SCP inputs.
  */
 export interface AnonymousSimulationRequest extends Omit<
@@ -117,7 +117,7 @@ export interface AnonymousSimulationRequest extends Omit<
   'principal' | 'resourceArn' | 'sessionPolicy'
 > {
   /**
-   * The concrete resource ARN to access. Anonymous wildcard-only requests are unsupported.
+   * Resource ARN to access, including wildcard patterns. Wildcard-only actions are unsupported.
    */
   resourceArn: string
 }
@@ -260,7 +260,7 @@ export async function simulateRequest(
 }
 
 /**
- * Simulate an unsigned request against a concrete resource ARN.
+ * Simulate an unsigned request against a resource ARN or wildcard resource pattern.
  *
  * @param simulationRequest the anonymous request details
  * @param collectClient the IAM collect client to use for data access

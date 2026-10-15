@@ -52,7 +52,7 @@ interface WorkerJobProperties {
  * Extended work item received from the main thread, includes requestId
  * so the worker can tag results and deny-detail messages.
  */
-interface TaggedWorkerTask extends WhoCanWorkItem {
+type TaggedWorkerTask = WhoCanWorkItem & {
   /** The request ID this task belongs to. */
   requestId: string
 }

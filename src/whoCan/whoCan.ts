@@ -10,7 +10,12 @@ import {
   iamServiceExists,
   type ResourceType
 } from '@actsecurity/iam-data'
-import { type Condition, type ConditionOperation, loadPolicy } from '@actsecurity/iam-policy'
+import {
+  type Condition,
+  type ConditionOperation,
+  type Statement,
+  loadPolicy
+} from '@actsecurity/iam-policy'
 import {
   type AllowedConditionExpression,
   type IgnoredConditions,
@@ -32,14 +37,30 @@ import {
  * Limits the set of principals that `whoCan` tests. The scope is a union of
  * principal ARNs, account IDs, and OU paths. It is **intersected** with the
  * resource-policy-derived scope so that principals outside the resource
- * policy's reach are still excluded.
+ * policy's reach are still excluded. An empty scope (`{}`) excludes all principals,
+ * including anonymous. To include only unsigned access, use
+ * `{ anonymous: true }`. Without a scope, anonymous access is considered
+ * whenever the resource policy contains a candidate Allow statement.
  */
 export interface WhoCanPrincipalScope {
-  /** Exact principal ARNs to test individually (does NOT expand to whole-account search). */
+  /**
+   * Exact principal ARNs/service names to test individually.
+   */
   principals?: string[]
-  /** Account IDs — test all principals in these accounts. */
+  /**
+   * Whether to include unsigned-access simulations when the resource policy has a
+   * candidate Allow statement. Defaults to false when a principal scope is supplied.
+   */
+  anonymous?: boolean
+
+  /**
+   * Account IDs — test all principals in these accounts.
+   **/
   accounts?: string[]
-  /** OU paths — test all principals in accounts under these OUs. Each string is a slash-separated path like `o-aaa/r-bbb/ou-ccc`, matching the format used by `aws:PrincipalOrgPaths` and `specificOrganizationalUnits`. */
+
+  /**
+   * OU paths — test all principals in accounts under these OUs. Each string is a slash-separated path like `o-aaa/r-bbb/ou-ccc`, matching the format used by `aws:PrincipalOrgPaths` and `specificOrganizationalUnits`.
+   **/
   ous?: string[]
 }
 
@@ -157,7 +178,13 @@ export interface WhoCanAllowedResourcePattern {
   details?: RequestGrant[]
 }
 
+/**
+ * Effective access for a collected principal, service, or unsigned caller.
+ */
 export interface WhoCanAllowed {
+  /**
+   * Principal ARN/service name, or "anonymous" for unsigned access.
+   */
   principal: string
   service: string
   action: string
@@ -207,7 +234,7 @@ export interface WhoCanAllowed {
  */
 interface BaseWhoCanDenyDetail {
   /**
-   * The principal that was denied
+   * Principal ARN/service name that was denied, or "anonymous" for unsigned access.
    */
   principal: string
 
@@ -410,6 +437,7 @@ export interface AccountsToCheck {
   specificPrincipals: string[]
   specificOrganizations: string[]
   specificOrganizationalUnits: string[]
+  /** Whether an Allow statement may grant unsigned access; simulation decides effectiveness. */
   checkAnonymous: boolean
   /**
    * Whether every principal from the resource account should be checked.
@@ -588,6 +616,28 @@ function checkForServicePrincipalConditions(conditions: Condition[]): ServicePri
 }
 
 /**
+ * Conservatively identify an Allow that could grant unsigned access.
+ * Arbitrary conditions, action/resource patterns, and denies are left to simulation.
+ *
+ * @param statement parsed resource-policy statement
+ * @returns whether anonymous simulation may find an effective grant
+ */
+function mayAllowAnonymous(statement: Statement): boolean {
+  if (!statement.isAllow()) {
+    return false
+  }
+  // NotPrincipal excludes identities; keep it as a candidate without condition narrowing.
+  if (statement.isNotPrincipalStatement()) {
+    return true
+  }
+  return (
+    statement.isPrincipalStatement() &&
+    statement.principals().some((principal) => principal.isWildcardPrincipal()) &&
+    checkForServicePrincipalConditions(statement.conditions()).type === 'not-service-only'
+  )
+}
+
+/**
  * Derives the accounts and specific principals that should be considered from a resource policy.
  *
  * Specific STS session principals are resolved through collect data so account-enumeration
@@ -619,6 +669,9 @@ export async function accountsToCheckBasedOnResourcePolicy(
 
   const policy = loadPolicy(resourcePolicy)
   for (const statement of policy.statements()) {
+    if (mayAllowAnonymous(statement)) {
+      accountsToCheck.checkAnonymous = true
+    }
     if (statement.isAllow() && statement.isNotPrincipalStatement()) {
       accountsToCheck.allAccounts = true
       accountsToCheck.checkAllFromResourceAccount = true
@@ -707,10 +760,6 @@ export async function accountsToCheckBasedOnResourcePolicy(
 
             if (!isExactOperator && !isPatternOperator) {
               continue
-            }
-
-            if (cond.operation().isIfExists()) {
-              accountsToCheck.checkAnonymous = true
             }
 
             for (const value of cond.conditionValues()) {
