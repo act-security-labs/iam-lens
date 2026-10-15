@@ -1,3 +1,10 @@
+## [0.1.171](https://github.com/act-security-labs/iam-lens/compare/v0.1.170...v0.1.171) (2026-10-15)
+
+
+### Features
+
+* include anonymous access in whoCan results ([#223](https://github.com/act-security-labs/iam-lens/issues/223)) ([7db08a0](https://github.com/act-security-labs/iam-lens/commit/7db08a05c1acc3b051b62f477d1da43608ebca5e))
+
 ## [0.1.170](https://github.com/act-security-labs/iam-lens/compare/v0.1.169...v0.1.170) (2026-10-14)
 
 
