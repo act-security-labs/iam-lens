@@ -233,6 +233,43 @@ const anonymousIntegrationCases: AnonymousIntegrationCase[] = [
 ]
 
 describe('simulateAnonymousRequest integration', () => {
+  it('returns public wildcard object patterns for an unsigned request', async () => {
+    //Given a public bucket with no S3 BPA restriction
+    const collectClient = await getTestDatasetClient('2')
+
+    //When an unsigned request targets every object in the bucket
+    const response = await simulateAnonymousRequest(
+      {
+        resourceArn: 'arn:aws:s3:::no-bpa-public-bucket/*',
+        resourceAccount: undefined,
+        action: 's3:GetObject',
+        customContextKeys: {},
+        simulationMode: 'Discovery'
+      },
+      collectClient
+    )
+
+    //Then the native anonymous principal and public object pattern are preserved
+    expect(response.request.principal).toEqual(anonymousPrincipal)
+    assertSuccessfulResult(response)
+    expect(response.result.overallResult).toBe('Allowed')
+    expect(response.result.resultType).toBe('wildcard')
+    if (response.result.resultType === 'wildcard') {
+      expect(
+        response.result.results.map((result) => ({
+          pattern: result.resourcePattern,
+          resourceType: result.resourceType,
+          result: result.analysis.result
+        }))
+      ).toEqual([
+        {
+          pattern: 'arn:aws:s3:::no-bpa-public-bucket/*',
+          resourceType: 'object',
+          result: 'Allowed'
+        }
+      ])
+    }
+  })
   for (const testCase of anonymousIntegrationCases) {
     it(testCase.name, async () => {
       //Given a collected IAM dataset and an anonymous request scenario

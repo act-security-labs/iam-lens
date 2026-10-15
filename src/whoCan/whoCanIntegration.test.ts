@@ -180,7 +180,7 @@ const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
   },
   {
     name: 'within an organization',
-    simulationCounts: { withoutIndex: 7, withIndex: 7 },
+    simulationCounts: { withoutIndex: 8, withIndex: 8 },
     data: '1',
     request: {
       resource: 'arn:aws:s3:::who-can-org',
@@ -237,7 +237,7 @@ const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
   },
   {
     name: 'shared with an account',
-    simulationCounts: { withoutIndex: 11, withIndex: 5 },
+    simulationCounts: { withoutIndex: 12, withIndex: 6 },
     data: '1',
     request: {
       resource: 'arn:aws:s3:::who-can-acct',
@@ -1585,7 +1585,7 @@ const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
 
   {
     name: 'same-account exact PrincipalArn trust policy',
-    simulationCounts: { withoutIndex: 24, withIndex: 1 },
+    simulationCounts: { withoutIndex: 25, withIndex: 2 },
     description:
       'Trust policy with Principal:"*" and StringEquals aws:PrincipalArn narrows to exactly one same-account principal. Duplicate canary: the principal must appear exactly once.',
     data: '2',
@@ -1607,7 +1607,7 @@ const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
   },
   {
     name: 'cross-account wildcard PrincipalArn trust policy',
-    simulationCounts: { withoutIndex: 25, withIndex: 1 },
+    simulationCounts: { withoutIndex: 26, withIndex: 2 },
     description:
       'Trust policy with Principal:"*" and ArnLike aws:PrincipalArn narrows to cross-account principals matching the wildcard pattern.',
     data: '2',
@@ -1681,7 +1681,7 @@ const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
   },
   {
     name: 'mixed explicit account grant plus wildcard PrincipalArn',
-    simulationCounts: { withoutIndex: 26, withIndex: 26 },
+    simulationCounts: { withoutIndex: 27, withIndex: 27 },
     description:
       'Trust policy with two statements: one granting an explicit account, another with wildcard + ArnLike PrincipalArn. Expected: union of account-granted principals and pattern-matched principals. Index/non-index divergence canary.',
     data: '2',
@@ -1724,7 +1724,7 @@ const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
   },
   {
     name: 'NotPrincipal trust policy excludes named principal',
-    simulationCounts: { withoutIndex: 26, withIndex: 26 },
+    simulationCounts: { withoutIndex: 27, withIndex: 27 },
     description:
       'Trust policy with Allow + NotPrincipal excludes the named principal. PrincipalArn filter is not built (safety: NotPrincipal). All eligible principals except the excluded one should appear. Same-account roles can assume without identity-side sts:AssumeRole permission.',
     data: '2',
@@ -1734,6 +1734,13 @@ const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
     },
     expected: {
       who: [
+        {
+          principal: 'anonymous',
+          service: 'sts',
+          action: 'AssumeRole',
+          level: 'write',
+          resourceType: 'role'
+        },
         {
           action: 'AssumeRole',
           principal: 'arn:aws:iam::400000000001:role/alpha-role',
@@ -1915,7 +1922,7 @@ const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
   },
   {
     name: 'wildcard trust policy with no conditions (safety valve)',
-    simulationCounts: { withoutIndex: 26, withIndex: 26 },
+    simulationCounts: { withoutIndex: 27, withIndex: 27 },
     description:
       'Trust policy with Principal:"*" and no conditions. PrincipalArn filter is not built. All principals with sts:AssumeRole permission are checked. Same-account roles can assume without identity-side sts:AssumeRole permission.',
     data: '2',
@@ -1925,6 +1932,13 @@ const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
     },
     expected: {
       who: [
+        {
+          principal: 'anonymous',
+          service: 'sts',
+          action: 'AssumeRole',
+          level: 'write',
+          resourceType: 'role'
+        },
         {
           action: 'AssumeRole',
           principal: 'arn:aws:iam::400000000001:role/alpha-role',
@@ -2139,7 +2153,7 @@ const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
 
   {
     name: 'deny-derived allow via StringNotLike narrows to matching principals',
-    simulationCounts: { withoutIndex: 1, withIndex: 1 },
+    simulationCounts: { withoutIndex: 2, withIndex: 2 },
     description:
       'Trust policy with Allow (broad PrincipalArn) + Deny with StringNotLike PrincipalArn. The deny blocks everyone NOT matching the pattern, creating an effective allow-list. Only principals matching the deny pattern survive. Deny-derived filtering applies to ALL principals including resource-account.',
     data: '2',
@@ -2162,7 +2176,7 @@ const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
   },
   {
     name: 'explicit deny via StringLike blocks matching principal including resource-account',
-    simulationCounts: { withoutIndex: 25, withIndex: 25 },
+    simulationCounts: { withoutIndex: 26, withIndex: 26 },
     description:
       'Trust policy with Allow (broad PrincipalArn) + Deny with StringLike PrincipalArn targeting local-alpha. Verifies that resource-account principals are NOT exempt from deny-side filtering (asymmetry with allow-side exemption). local-alpha should be denied even though it is in the resource account.',
     data: '2',
@@ -2353,7 +2367,7 @@ const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
   },
   {
     name: 'replacement variable in PrincipalArn prevents filter from being built',
-    simulationCounts: { withoutIndex: 26, withIndex: 26 },
+    simulationCounts: { withoutIndex: 27, withIndex: 27 },
     description:
       'Trust policy has two wildcard-Allow statements: one with a replacement variable in PrincipalArn (unusable for static filtering) and one with a literal pattern. Because the first statement lacks a usable filter, buildPrincipalArnFilter returns undefined and no pre-filtering occurs. All principals are simulated; alpha-role matches stmt2 literal pattern, tagged-role matches stmt1 because its team tag resolves to its own ARN.',
     data: '2',
@@ -2418,7 +2432,7 @@ const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
 
   {
     name: 'resource-account principals bypass allow-side PrincipalArn filter',
-    simulationCounts: { withoutIndex: 25, withIndex: 4 },
+    simulationCounts: { withoutIndex: 26, withIndex: 5 },
     description:
       'Trust policy grants the resource account explicitly (stmt1) and has a wildcard PrincipalArn pattern matching only cross-account roles (stmt2). Resource-account principals do not match the PrincipalArn pattern but must still appear because (a) they bypass the allow-side filter via the resource-account / exemptAccounts exemption and (b) the account grant in stmt1 allows them in simulation. Note: Principal:{"AWS":"ACCOUNT"} (unlike Principal:"*") requires identity-side sts:AssumeRole — only roles with that permission appear.',
     data: '2',
@@ -2533,7 +2547,7 @@ const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
   },
   {
     name: 'literal PrincipalAccount via StringLike narrows to matching account',
-    simulationCounts: { withoutIndex: 26, withIndex: 2 },
+    simulationCounts: { withoutIndex: 27, withIndex: 3 },
     description:
       'Trust policy with StringLike aws:PrincipalAccount = "400000000001" (literal value, no wildcards). The StringLike-with-literal narrowing is new and was previously only unit-tested. Expected: only principals in account 400000000001 with sts:AssumeRole permission.',
     data: '2',
@@ -2604,7 +2618,7 @@ const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
   },
   {
     name: 'KMS kms:CallerAccount positive — principals in matching account are allowed',
-    simulationCounts: { withoutIndex: 26, withIndex: 2 },
+    simulationCounts: { withoutIndex: 27, withIndex: 3 },
     description:
       'KMS key policy with kms:CallerAccount = 400000000001. Only principals in that account with kms:Decrypt identity permission should be allowed. This is the first end-to-end KMS coverage for the CallerAccount narrowing logic.',
     data: '2',
@@ -2688,7 +2702,7 @@ const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
   },
   {
     name: 'KMS kms:CallerAccount negative — non-existent account returns empty',
-    simulationCounts: { withoutIndex: 24, withIndex: 0 },
+    simulationCounts: { withoutIndex: 25, withIndex: 1 },
     description:
       'KMS key policy with kms:CallerAccount = 999999999999 (account not in dataset). Expected: no principals found, account reported as not found.',
     data: '2',
@@ -2703,7 +2717,7 @@ const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
   },
   {
     name: 'KMS same-account CallerAccount — all same-account principals allowed by key policy',
-    simulationCounts: { withoutIndex: 24, withIndex: 24 },
+    simulationCounts: { withoutIndex: 25, withIndex: 25 },
     description:
       'KMS key policy with kms:CallerAccount = resource account. resourceAccountTrustedByPolicy is true, so allFromAccount is set and all same-account principals are enumerated. The key policy grants access to the entire account, so all same-account principals are allowed regardless of identity-side kms:Decrypt permission.',
     data: '2',
@@ -2944,7 +2958,7 @@ const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
   },
   {
     name: 'negative ArnNotLike PrincipalArn — same-account principals still found',
-    simulationCounts: { withoutIndex: 26, withIndex: 26 },
+    simulationCounts: { withoutIndex: 27, withIndex: 27 },
     description:
       'Trust policy with Principal:"*" and ArnNotLike aws:PrincipalArn excluding a cross-account pattern. ' +
       'The negative operator does not narrow, so checkAllFromResourceAccount is true and all same-account ' +
@@ -2958,6 +2972,13 @@ const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
     expected: {
       allAccountsChecked: true,
       who: [
+        {
+          principal: 'anonymous',
+          service: 'sts',
+          action: 'AssumeRole',
+          level: 'write',
+          resourceType: 'role'
+        },
         {
           action: 'AssumeRole',
           principal: 'arn:aws:iam::400000000001:role/alpha-role',
@@ -3145,7 +3166,7 @@ const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
   },
   {
     name: 'org trust — PrincipalOrgID conservative trust includes same-account principals',
-    simulationCounts: { withoutIndex: 26, withIndex: 26 },
+    simulationCounts: { withoutIndex: 27, withIndex: 27 },
     description:
       'Trust policy with Principal:"*" and aws:PrincipalOrgID = o-44444444. resourceAccountTrustedByPolicy is conservatively true (org may include the resource account). allFromAccount is set, so all same-account principals are enumerated. Both accounts (400000000001, 400000000002) are in the org, so cross-account principals with identity-side sts:AssumeRole are also included.',
     data: '2',
@@ -3359,7 +3380,7 @@ const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
   },
   {
     name: 'duplicate specific principal from explicit principal + PrincipalArn condition',
-    simulationCounts: { withoutIndex: 24, withIndex: 1 },
+    simulationCounts: { withoutIndex: 25, withIndex: 2 },
     description:
       'Trust policy where the same principal appears in specificPrincipals twice: once from an explicit Principal element (stmt1) and once from a StringEquals aws:PrincipalArn condition (stmt2). The result must contain the principal exactly once.',
     data: '2',
@@ -3483,7 +3504,7 @@ const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
   },
   {
     name: 'bucket policy Allow with NotResource — PrincipalArn filter narrows on resource outside excluded prefix',
-    simulationCounts: { withoutIndex: 25, withIndex: 25 },
+    simulationCounts: { withoutIndex: 26, withIndex: 26 },
     description:
       'Bucket policy has a wildcard-Allow with NotResource on a private prefix and a StringLike PrincipalArn pattern. For an object outside the excluded prefix the Allow applies; the filter narrows cross-account candidates to the pattern match and alpha-role is granted via the bucket policy while s3-reader is granted via same-account identity.',
     data: '2',
@@ -3513,7 +3534,7 @@ const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
   },
   {
     name: 'bucket policy Allow with NotResource — simulation denies cross-account on resource inside excluded prefix',
-    simulationCounts: { withoutIndex: 25, withIndex: 25 },
+    simulationCounts: { withoutIndex: 26, withIndex: 26 },
     description:
       'Same bucket policy as the previous test but whoCan queries an object inside the excluded prefix; the filter still admits alpha-role as a candidate but the simulator correctly denies it, while same-account s3-reader remains allowed via its identity grant.',
     data: '2',

@@ -8,6 +8,16 @@ Lists all principals in your IAM data who are allowed to perform one or more spe
 
 This works by starting with the resource policy (if any) and looking for all principals, accounts, and organizations that have access to the resource. It will then check each principal for the specified actions and return a list of all principals that are allowed to perform the action.
 
+## Anonymous Access
+
+When a resource policy contains an Allow that may grant unsigned access, `who-can` also evaluates anonymous access. Allowed results use `"principal": "anonymous"`, including `allowedPatterns` when the request contains wildcard resources such as `arn:aws:s3:::public-bucket/*`.
+
+Candidates include wildcard AWS principals and `NotPrincipal` Allows. Known service-only wildcard statements are excluded; arbitrary conditions and resource-side controls are evaluated by the simulator. Anonymous results may therefore be conditional. No anonymous simulation runs without a candidate statement, without a resource, or for wildcard-only actions.
+
+For library callers, a supplied `principalScope` includes unsigned access only when `anonymous: true`. An empty scope (`{}`) excludes anonymous access; `{ anonymous: true }` checks only unsigned access. Omitting `principalScope` includes candidate anonymous checks as usual.
+
+Anonymous simulations participate in `simulationCount`, optional grant details, and optional deny details (which also use `"principal": "anonymous"`).
+
 ## Conditional Access Output
 
 Allowed results may include a `conditions` field when access depends on request-context values. This field is a structured expression from `iam-simulate` that describes the conditions under which the principal is allowed. Unconditional allows omit `conditions`.

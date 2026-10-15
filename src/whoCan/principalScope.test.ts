@@ -4,6 +4,22 @@ import { type WhoCanPrincipalScope } from './whoCan.js'
 import { intersectWithPrincipalScope, resolvePrincipalScope } from './principalScope.js'
 
 describe('resolvePrincipalScope', () => {
+  it('keeps anonymous selection separate from collected-principal resolution', async () => {
+    //Given a scope containing both unsigned access and a collected identity
+    const principal = 'arn:aws:iam::111111111111:role/Reader'
+    const client = {} as unknown as IamCollectClient
+
+    //When normalizing the scope for collected-principal enumeration
+    const result = await resolvePrincipalScope(client, {
+      principals: [principal],
+      accounts: ['111111111111'],
+      anonymous: true
+    })
+
+    //Then the boolean does not affect the collected identity or account sets
+    expect(result.principals).toEqual(new Set([principal]))
+    expect(result.accounts).toEqual(new Set(['111111111111']))
+  })
   it('should return only principals when scope has only principals', async () => {
     //Given a scope with only principals
     const scope: WhoCanPrincipalScope = {

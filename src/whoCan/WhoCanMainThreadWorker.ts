@@ -14,7 +14,7 @@ import { executeWhoCan, type WhoCanExecutionResult, type WhoCanWorkItem } from '
  * A work item tagged with its owning request ID, used by the main-thread
  * runner so that simulation results can be routed back to the correct request.
  */
-export interface TaggedWhoCanWorkItem extends WhoCanWorkItem {
+export type TaggedWhoCanWorkItem = WhoCanWorkItem & {
   /** The request ID this work item belongs to. */
   requestId: string
 }

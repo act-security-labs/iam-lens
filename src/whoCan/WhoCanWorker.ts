@@ -9,20 +9,45 @@ import {
 } from '@actsecurity/iam-simulate'
 import type { Job } from '@actsecurity/job'
 import { IamCollectClient } from '../collect/client.js'
-import { simulateRequest } from '../simulate/simulate.js'
+import { simulateAnonymousRequest, simulateRequest } from '../simulate/simulate.js'
 import type { S3AbacOverride } from '../utils/s3Abac.js'
 import type { WhoCanAllowed, WhoCanAllowedResourcePattern } from './whoCan.js'
 import { log } from '@actsecurity/log'
 
-export interface WhoCanWorkItem {
-  resource: string | undefined
+/**
+ * Shared scheduling settings for a who-can scenario.
+ */
+interface BaseWhoCanWorkItem {
   resourceAccount: string | undefined
   action: string
-  principal: string
-  resultPrincipal?: string | undefined
   strictContextKeys: string[] | undefined
   collectDenyDetails: boolean
 }
+
+/**
+ * A scenario for a collected identity or AWS service principal.
+ */
+interface AuthenticatedWhoCanWorkItem extends BaseWhoCanWorkItem {
+  simulationVariant: 'authenticated'
+  resource: string | undefined
+  principal: string
+  resultPrincipal?: string | undefined
+}
+
+/**
+ * An unsigned scenario requiring a resource ARN or resource pattern.
+ */
+interface AnonymousWhoCanWorkItem extends BaseWhoCanWorkItem {
+  simulationVariant: 'anonymous'
+  resource: string
+  principal: 'anonymous'
+  resultPrincipal?: never
+}
+
+/**
+ * A collected/service principal scenario, or an unsigned resource scenario.
+ */
+export type WhoCanWorkItem = AuthenticatedWhoCanWorkItem | AnonymousWhoCanWorkItem
 
 /**
  * Execution result when the principal is allowed access.
@@ -121,6 +146,14 @@ export interface WhoCanOptions {
   strictContextKeys?: string[]
 }
 
+/**
+ * Evaluate a scheduled principal or anonymous scenario in Discovery then Strict mode.
+ *
+ * @param workItem scenario to evaluate
+ * @param collectClient collected policy data source
+ * @param whoCanOptions simulation and detail settings
+ * @returns mapped access result or denial
+ */
 export async function executeWhoCan(
   workItem: WhoCanWorkItem,
   collectClient: IamCollectClient,
@@ -128,19 +161,28 @@ export async function executeWhoCan(
 ): Promise<WhoCanExecutionResult> {
   const { principal, resource, resourceAccount, action } = workItem
   const [service, serviceAction] = action.split(':')
-  const discoveryResult = await simulateRequest(
-    {
-      principal,
+  /**
+   * Run this scenario with the matching simulator variant.
+   * @param simulationMode evaluation mode
+   * @returns normalized simulator response
+   */
+  const run = (simulationMode: 'Discovery' | 'Strict') => {
+    const request = {
       resourceArn: resource,
-      resourceAccount: resourceAccount,
+      resourceAccount,
       action,
       customContextKeys: {},
-      simulationMode: 'Discovery',
+      simulationMode,
       s3AbacOverride: whoCanOptions.s3AbacOverride,
       additionalStrictContextKeys: whoCanOptions.strictContextKeys
-    },
-    collectClient
-  )
+    }
+    if (workItem.simulationVariant === 'anonymous') {
+      // Read the narrowed resource again so anonymous requests require a defined ARN/pattern.
+      return simulateAnonymousRequest({ ...request, resourceArn: workItem.resource }, collectClient)
+    }
+    return simulateRequest({ ...request, principal }, collectClient)
+  }
+  const discoveryResult = await run('Discovery')
 
   if (discoveryResult.result.resultType === 'error') {
     log.error({
@@ -154,19 +196,7 @@ export async function executeWhoCan(
 
   const actionType = await getActionLevel(service, serviceAction)
   if (discoveryResult?.result.overallResult === 'Allowed') {
-    const strictResult = await simulateRequest(
-      {
-        principal,
-        resourceArn: resource,
-        resourceAccount,
-        action,
-        customContextKeys: {},
-        simulationMode: 'Strict',
-        s3AbacOverride: whoCanOptions.s3AbacOverride,
-        additionalStrictContextKeys: whoCanOptions.strictContextKeys
-      },
-      collectClient
-    )
+    const strictResult = await run('Strict')
 
     if (strictResult.result.resultType === 'error') {
       log.error({

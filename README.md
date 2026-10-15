@@ -150,7 +150,7 @@ iam-lens simulate \
 
 The variants make their assumptions explicit:
 
-- **Anonymous** requests have no identity policy, session policy, permission boundary, or SCP. A concrete resource ARN is required, but the resource does not need to be collected; specify `--resource-account` when its account cannot be inferred. Principal-derived context keys cannot be supplied. Available resource policies, RCPs, VPC endpoint policies, and collected S3 controls still apply.
+- **Anonymous** requests have no identity policy, session policy, permission boundary, or SCP. A resource ARN is required (wildcard resource patterns are supported), but the resource does not need to be collected; specify `--resource-account` when its account cannot be inferred. Principal-derived context keys cannot be supplied. Available resource policies, RCPs, VPC endpoint policies, and collected S3 controls still apply.
 - **External principal** requests model a principal from an uncollected account with a synthetic allow-all identity policy and no permission boundary or SCP. Session policies and collected resource-side controls still apply, so cross-account access still requires an applicable resource-side grant. In Discovery mode, unknown principal attributes such as principal tags are returned as conditions.
 - **External resource** requests require a concrete resource ARN and keep the collected principal's identity policies, permission boundary, session policy, SCPs, and VPC endpoint policies. They apply no RCPs and use a supplied or synthetic resource/trust policy. S3 ABAC and Block Public Access default to disabled for the uncollected resource; ABAC can be enabled with `--s3-abac-override enabled`.
 
@@ -164,7 +164,7 @@ Anonymous, external-principal, and external-resource simulations do not support 
 iam-lens who-can [options]
 ```
 
-Lists all principals in your IAM data who are allowed to perform one or more specified actions on a resource (or account for wildcard only actions). If applicable it will check the resource policy to find cross-account permissions and AWS service principals.
+Lists all principals in your IAM data who are allowed to perform one or more specified actions on a resource (or account for wildcard only actions). If applicable it will check the resource policy to find cross-account permissions and AWS service principals. Potentially public resource policies are also simulated for unsigned access, returned as `"principal": "anonymous"`, including wildcard resource patterns.
 
 [Full who-can documentation](docs/WhoCan.md)
 
