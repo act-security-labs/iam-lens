@@ -1119,6 +1119,350 @@ const simulateIntegrationTest: {
     },
     expected: 'ImplicitlyDenied',
     expectedConditions: undefined
+  },
+  {
+    name: 'Strict mode allows a secret whose secretsmanager:ResourceTag/env is dev',
+    data: '4',
+    request: {
+      resourceArn: 'arn:aws:secretsmanager:us-east-1:500000000002:secret:dev-db-AbCdEf',
+      resourceAccount: undefined,
+      action: 'secretsmanager:DescribeSecret',
+      principal: 'arn:aws:iam::500000000002:user/operator',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'Allowed',
+    expectedConditions: undefined
+  },
+  {
+    name: 'Discovery allows a secret whose secretsmanager:ResourceTag/env is dev',
+    data: '4',
+    request: {
+      resourceArn: 'arn:aws:secretsmanager:us-east-1:500000000002:secret:dev-db-AbCdEf',
+      resourceAccount: undefined,
+      action: 'secretsmanager:DescribeSecret',
+      principal: 'arn:aws:iam::500000000002:user/operator',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedConditions: undefined
+  },
+  {
+    name: 'Strict mode denies a secret whose secretsmanager:ResourceTag/env is prod',
+    data: '4',
+    request: {
+      resourceArn: 'arn:aws:secretsmanager:us-east-1:500000000002:secret:prod-db-AbCdEf',
+      resourceAccount: undefined,
+      action: 'secretsmanager:DescribeSecret',
+      principal: 'arn:aws:iam::500000000002:user/operator',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'ExplicitlyDenied',
+    expectedConditions: undefined
+  },
+  {
+    name: 'Discovery denies a secret whose secretsmanager:ResourceTag/env is prod',
+    data: '4',
+    request: {
+      resourceArn: 'arn:aws:secretsmanager:us-east-1:500000000002:secret:prod-db-AbCdEf',
+      resourceAccount: undefined,
+      action: 'secretsmanager:DescribeSecret',
+      principal: 'arn:aws:iam::500000000002:user/operator',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ExplicitlyDenied',
+    expectedConditions: undefined
+  },
+  {
+    name: 'Strict mode denies an untagged secret on secretsmanager:ResourceTag/env',
+    data: '4',
+    request: {
+      resourceArn: 'arn:aws:secretsmanager:us-east-1:500000000002:secret:untagged-db-AbCdEf',
+      resourceAccount: undefined,
+      action: 'secretsmanager:DescribeSecret',
+      principal: 'arn:aws:iam::500000000002:user/operator',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'ExplicitlyDenied',
+    expectedConditions: undefined
+  },
+  {
+    name: 'Discovery denies an untagged secret on secretsmanager:ResourceTag/env',
+    data: '4',
+    request: {
+      resourceArn: 'arn:aws:secretsmanager:us-east-1:500000000002:secret:untagged-db-AbCdEf',
+      resourceAccount: undefined,
+      action: 'secretsmanager:DescribeSecret',
+      principal: 'arn:aws:iam::500000000002:user/operator',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ExplicitlyDenied',
+    expectedConditions: undefined
+  },
+  {
+    name: 'Discovery makes secretsmanager:ResourceTag/env conditional for an uncollected secret',
+    comment: 'The dataset does not collect this secret, so its tags are unknown.',
+    data: '4',
+    request: {
+      resourceArn: 'arn:aws:secretsmanager:us-east-1:500000000002:secret:new-db-AbCdEf',
+      resourceAccount: undefined,
+      action: 'secretsmanager:DescribeSecret',
+      principal: 'arn:aws:iam::500000000002:user/operator',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedConditions: {
+      conditionType: 'condition',
+      op: 'StringEquals',
+      key: 'secretsmanager:ResourceTag/env',
+      values: ['dev'],
+      inverted: true,
+      sources: [
+        {
+          effect: 'Deny',
+          policyIdentifier:
+            'arn:aws:organizations::500000000001:policy/o-55555555/service_control_policy/p-servicetagkeys',
+          policyType: 'scp',
+          orgIdentifier: '500000000002',
+          statementId: 'DescribeOnlyDevSecrets',
+          statementIndex: 1
+        }
+      ]
+    }
+  },
+  {
+    name: 'Strict mode allows an instance whose ec2:ResourceTag/env is dev',
+    data: '4',
+    request: {
+      resourceArn: 'arn:aws:ec2:us-east-1:500000000002:instance/i-0de00000000000000',
+      resourceAccount: undefined,
+      action: 'ec2:TerminateInstances',
+      principal: 'arn:aws:iam::500000000002:user/operator',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'Allowed',
+    expectedConditions: undefined
+  },
+  {
+    name: 'Discovery allows an instance whose ec2:ResourceTag/env is dev',
+    data: '4',
+    request: {
+      resourceArn: 'arn:aws:ec2:us-east-1:500000000002:instance/i-0de00000000000000',
+      resourceAccount: undefined,
+      action: 'ec2:TerminateInstances',
+      principal: 'arn:aws:iam::500000000002:user/operator',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedConditions: undefined
+  },
+  {
+    name: 'Strict mode denies an instance whose ec2:ResourceTag/env is prod',
+    data: '4',
+    request: {
+      resourceArn: 'arn:aws:ec2:us-east-1:500000000002:instance/i-0b0d0000000000000',
+      resourceAccount: undefined,
+      action: 'ec2:TerminateInstances',
+      principal: 'arn:aws:iam::500000000002:user/operator',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'ImplicitlyDenied',
+    expectedConditions: undefined
+  },
+  {
+    name: 'Discovery denies an instance whose ec2:ResourceTag/env is prod',
+    data: '4',
+    request: {
+      resourceArn: 'arn:aws:ec2:us-east-1:500000000002:instance/i-0b0d0000000000000',
+      resourceAccount: undefined,
+      action: 'ec2:TerminateInstances',
+      principal: 'arn:aws:iam::500000000002:user/operator',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ImplicitlyDenied',
+    expectedConditions: undefined
+  },
+  {
+    name: 'Strict mode denies an untagged instance on ec2:ResourceTag/env',
+    data: '4',
+    request: {
+      resourceArn: 'arn:aws:ec2:us-east-1:500000000002:instance/i-0aa00000000000000',
+      resourceAccount: undefined,
+      action: 'ec2:TerminateInstances',
+      principal: 'arn:aws:iam::500000000002:user/operator',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'ImplicitlyDenied',
+    expectedConditions: undefined
+  },
+  {
+    name: 'Discovery denies an untagged instance on ec2:ResourceTag/env',
+    data: '4',
+    request: {
+      resourceArn: 'arn:aws:ec2:us-east-1:500000000002:instance/i-0aa00000000000000',
+      resourceAccount: undefined,
+      action: 'ec2:TerminateInstances',
+      principal: 'arn:aws:iam::500000000002:user/operator',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ImplicitlyDenied',
+    expectedConditions: undefined
+  },
+  {
+    name: 'Discovery makes ec2:ResourceTag/env conditional for an uncollected instance',
+    comment: 'The dataset does not collect this instance, so its tags are unknown.',
+    data: '4',
+    request: {
+      resourceArn: 'arn:aws:ec2:us-east-1:500000000002:instance/i-0ff00000000000000',
+      resourceAccount: undefined,
+      action: 'ec2:TerminateInstances',
+      principal: 'arn:aws:iam::500000000002:user/operator',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedConditions: {
+      conditionType: 'condition',
+      op: 'StringEquals',
+      key: 'ec2:ResourceTag/env',
+      values: ['dev'],
+      sources: [
+        {
+          effect: 'Allow',
+          policyIdentifier: 'arn:aws:iam::500000000002:user/operator#Operator',
+          policyType: 'identity',
+          statementIndex: 1
+        }
+      ]
+    }
+  },
+  {
+    name: 'Strict mode allows a parameter whose ssm:resourceTag/env is dev',
+    data: '4',
+    request: {
+      resourceArn: 'arn:aws:ssm:us-east-1:500000000002:parameter/dev/db-host',
+      resourceAccount: undefined,
+      action: 'ssm:GetParameter',
+      principal: 'arn:aws:iam::500000000002:user/operator',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'Allowed',
+    expectedConditions: undefined
+  },
+  {
+    name: 'Discovery allows a parameter whose ssm:resourceTag/env is dev',
+    data: '4',
+    request: {
+      resourceArn: 'arn:aws:ssm:us-east-1:500000000002:parameter/dev/db-host',
+      resourceAccount: undefined,
+      action: 'ssm:GetParameter',
+      principal: 'arn:aws:iam::500000000002:user/operator',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedConditions: undefined
+  },
+  {
+    name: 'Strict mode denies a parameter whose ssm:resourceTag/env is prod',
+    data: '4',
+    request: {
+      resourceArn: 'arn:aws:ssm:us-east-1:500000000002:parameter/prod/db-host',
+      resourceAccount: undefined,
+      action: 'ssm:GetParameter',
+      principal: 'arn:aws:iam::500000000002:user/operator',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'ExplicitlyDenied',
+    expectedConditions: undefined
+  },
+  {
+    name: 'Discovery denies a parameter whose ssm:resourceTag/env is prod',
+    data: '4',
+    request: {
+      resourceArn: 'arn:aws:ssm:us-east-1:500000000002:parameter/prod/db-host',
+      resourceAccount: undefined,
+      action: 'ssm:GetParameter',
+      principal: 'arn:aws:iam::500000000002:user/operator',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ExplicitlyDenied',
+    expectedConditions: undefined
+  },
+  {
+    name: 'Strict mode denies an untagged parameter on ssm:resourceTag/env',
+    data: '4',
+    request: {
+      resourceArn: 'arn:aws:ssm:us-east-1:500000000002:parameter/untagged/db-host',
+      resourceAccount: undefined,
+      action: 'ssm:GetParameter',
+      principal: 'arn:aws:iam::500000000002:user/operator',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'ExplicitlyDenied',
+    expectedConditions: undefined
+  },
+  {
+    name: 'Discovery denies an untagged parameter on ssm:resourceTag/env',
+    data: '4',
+    request: {
+      resourceArn: 'arn:aws:ssm:us-east-1:500000000002:parameter/untagged/db-host',
+      resourceAccount: undefined,
+      action: 'ssm:GetParameter',
+      principal: 'arn:aws:iam::500000000002:user/operator',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ExplicitlyDenied',
+    expectedConditions: undefined
+  },
+  {
+    name: 'Discovery makes ssm:resourceTag/env conditional for an uncollected parameter',
+    comment: 'The dataset does not collect this parameter, so its tags are unknown.',
+    data: '4',
+    request: {
+      resourceArn: 'arn:aws:ssm:us-east-1:500000000002:parameter/new/db-host',
+      resourceAccount: undefined,
+      action: 'ssm:GetParameter',
+      principal: 'arn:aws:iam::500000000002:user/operator',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedConditions: {
+      conditionType: 'condition',
+      op: 'StringEquals',
+      key: 'ssm:resourceTag/env',
+      values: ['dev'],
+      inverted: true,
+      sources: [
+        {
+          effect: 'Deny',
+          policyIdentifier:
+            'arn:aws:organizations::500000000001:policy/o-55555555/service_control_policy/p-servicetagkeys',
+          policyType: 'scp',
+          orgIdentifier: '500000000002',
+          statementId: 'ReadOnlyDevParameters',
+          statementIndex: 2
+        }
+      ]
+    }
   }
 ]
 
