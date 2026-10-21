@@ -1,0 +1,4 @@
+{
+  "arn": "arn:aws:organizations::500000000001:policy/o-55555555/service_control_policy/p-servicetagkeys",
+  "name": "ServiceTagKeys"
+}

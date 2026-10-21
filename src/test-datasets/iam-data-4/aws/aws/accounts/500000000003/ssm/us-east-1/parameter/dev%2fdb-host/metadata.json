@@ -1,0 +1,4 @@
+{
+  "arn": "arn:aws:ssm:us-east-1:500000000003:parameter/dev/db-host",
+  "name": "/dev/db-host"
+}

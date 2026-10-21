@@ -39,7 +39,8 @@ import {
   contextValue,
   createContextKeys,
   isAnonymousPrincipalContextKey,
-  knownContextKeys
+  knownContextKeys,
+  RESOURCE_TAG_KEY_PATTERNS
 } from './contextKeys.js'
 import { externalResourcePolicy, syntheticIdentityPolicy } from './generatedPolicies.js'
 import {
@@ -807,9 +808,12 @@ function makeGeneratedDiscoveryContextKeyNames(
   generatedContextKeyNames.push(...Object.keys(request.customContextKeys))
 
   if (resourceTagsAreKnown) {
-    generatedContextKeyNames.push('/^aws:ResourceTag\/.*/')
+    generatedContextKeyNames.push(
+      RESOURCE_TAG_KEY_PATTERNS.resourceTag,
+      RESOURCE_TAG_KEY_PATTERNS.serviceResourceTag
+    )
     if (s3BucketOrObjectRequest) {
-      generatedContextKeyNames.push('/^s3:BucketTag\/.*/')
+      generatedContextKeyNames.push(RESOURCE_TAG_KEY_PATTERNS.bucketTag)
     }
   }
 

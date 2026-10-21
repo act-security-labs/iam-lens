@@ -1,0 +1,11 @@
+{
+  "arn": "arn:aws:organizations::500000000001:organization/o-55555555",
+  "features": {
+    "RESOURCE_CONTROL_POLICY": true,
+    "SERVICE_CONTROL_POLICY": true
+  },
+  "id": "o-55555555",
+  "rootAccountArn": "arn:aws:organizations::500000000001:account/o-55555555/500000000001",
+  "rootAccountId": "500000000001",
+  "rootOu": "r-cd34"
+}
