@@ -44,6 +44,7 @@ export {
   type WhoCanAllowedResourcePattern,
   type WhoCanResponse
 } from './whoCan/whoCan.js'
+export { iamPatternToRegex } from './whoCan/principalArnFilter.js'
 export {
   WhoCanProcessor,
   type WhoCanProcessorConfig,
