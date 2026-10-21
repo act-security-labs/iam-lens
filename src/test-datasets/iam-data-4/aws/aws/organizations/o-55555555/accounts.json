@@ -11,13 +11,5 @@
       "arn:aws:organizations::500000000001:policy/o-55555555/service_control_policy/p-servicetagkeys",
       "arn:aws:organizations::aws:policy/service_control_policy/p-FullAWSAccess"
     ]
-  },
-  "500000000003": {
-    "ou": "r-cd34",
-    "rcps": [],
-    "scps": [
-      "arn:aws:organizations::500000000001:policy/o-55555555/service_control_policy/p-globaltagkeys",
-      "arn:aws:organizations::aws:policy/service_control_policy/p-FullAWSAccess"
-    ]
   }
 }
