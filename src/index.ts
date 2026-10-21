@@ -21,7 +21,7 @@ export {
 } from './collect/collect.js'
 export { principalCan, type PrincipalCanInput } from './principalCan/principalCan.js'
 export { makePrincipalIndex } from './principalIndex/makePrincipalIndex.js'
-export type { ContextKeys } from './simulate/contextKeys.js'
+export { RESOURCE_TAG_KEY_PATTERNS, type ContextKeys } from './simulate/contextKeys.js'
 export {
   simulateRequest,
   simulateAnonymousRequest,
