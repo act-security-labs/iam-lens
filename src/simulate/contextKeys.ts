@@ -1,3 +1,4 @@
+import { iamActionDetails, iamActionExists, iamResourceTypeDetails } from '@actsecurity/iam-data'
 import {
   actionSupportsAwsResourceInfoContextKeys,
   bucketArn,
@@ -66,6 +67,27 @@ export const knownContextKeys: readonly string[] = [
 
   'kms:CallerAccount'
 ]
+
+/**
+ * Discovery key patterns for the resource tag keys iam-lens fills from a resource's collected tags.
+ *
+ * A caller's Discovery constraint replaces one of these only when its key name is the same text,
+ * compared case-insensitively.
+ */
+export const RESOURCE_TAG_KEY_PATTERNS = {
+  /** `aws:ResourceTag/<key>` */
+  resourceTag: '/^aws:ResourceTag/.*/',
+
+  /** `s3:BucketTag/<key>`, on a bucket or an object in it */
+  bucketTag: '/^s3:BucketTag/.*/',
+
+  /**
+   * Service-prefixed resource tag keys, such as `ec2:ResourceTag/<key>` or `ssm:resourceTag/<key>`.
+   */
+  serviceResourceTag: '/^(?!aws:)[a-z0-9-]+:ResourceTag/.*/'
+} as const
+
+const serviceResourceTagKeyPrefix = /^(?!aws:)[a-z0-9-]+:resourcetag\//i
 
 export const CONTEXT_KEYS = {
   assumedRoot: 'aws:AssumedRoot',
@@ -249,10 +271,14 @@ export async function createContextKeys(
         simulationRequest.resourceAccount!
       )
     resourceTagsAreKnown = resourceTagsPreset
+    const serviceTagKeyPrefixes = await serviceResourceTagKeyPrefixes(simulationRequest.action)
     for (const [key, value] of Object.entries(resourceTags)) {
       contextKeys[`aws:ResourceTag/${key}`] = value
       if (isBucket) {
         contextKeys[`s3:BucketTag/${key}`] = value
+      }
+      for (const prefix of serviceTagKeyPrefixes) {
+        contextKeys[`${prefix}${key}`] = value
       }
     }
   }
@@ -291,6 +317,40 @@ export async function createContextKeys(
     resourceTagsAreKnown,
     contextKeys
   }
+}
+
+/**
+ * Get the service-prefixed resource tag key prefixes an action's condition keys name, such as
+ * `ec2:ResourceTag/` for `ec2:TerminateInstances` or `iam:ResourceTag/` for `sts:AssumeRole`.
+ *
+ * These keys hold the same tags as `aws:ResourceTag/`. A prefix is returned once, with iam-data's
+ * casing; an action iam-data does not know returns none.
+ *
+ * @param action the request action, such as `ec2:TerminateInstances`
+ * @returns the key text before the tag key, such as `ec2:ResourceTag/`
+ */
+async function serviceResourceTagKeyPrefixes(action: string): Promise<string[]> {
+  const [service, actionName] = action.split(':')
+  if (!(await iamActionExists(service, actionName))) {
+    return []
+  }
+
+  const actionDetails = await iamActionDetails(service, actionName)
+  const resourceTypeKeys = await Promise.all(
+    actionDetails.resourceTypes.map(async (resourceType) => [
+      ...(resourceType.conditionKeys ?? []),
+      ...((await iamResourceTypeDetails(service, resourceType.name)).conditionKeys ?? [])
+    ])
+  )
+
+  const prefixesByLowerCase = new Map<string, string>()
+  for (const key of [...actionDetails.conditionKeys, ...resourceTypeKeys.flat()]) {
+    const prefix = key.match(serviceResourceTagKeyPrefix)?.[0]
+    if (prefix && !prefixesByLowerCase.has(prefix.toLowerCase())) {
+      prefixesByLowerCase.set(prefix.toLowerCase(), prefix)
+    }
+  }
+  return [...prefixesByLowerCase.values()]
 }
 
 /**

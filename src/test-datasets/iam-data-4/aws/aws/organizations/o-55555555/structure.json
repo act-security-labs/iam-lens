@@ -1,0 +1,8 @@
+{
+  "r-cd34": {
+    "accounts": [
+      "arn:aws:organizations::500000000001:account/o-55555555/500000000001",
+      "arn:aws:organizations::500000000001:account/o-55555555/500000000002"
+    ]
+  }
+}

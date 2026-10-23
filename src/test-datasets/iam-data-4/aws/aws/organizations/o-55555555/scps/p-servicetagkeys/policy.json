@@ -1,0 +1,27 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DescribeOnlyDevSecrets",
+      "Effect": "Deny",
+      "Action": "secretsmanager:DescribeSecret",
+      "Resource": "*",
+      "Condition": {
+        "StringNotEquals": {
+          "secretsmanager:ResourceTag/env": "dev"
+        }
+      }
+    },
+    {
+      "Sid": "ReadOnlyDevParameters",
+      "Effect": "Deny",
+      "Action": "ssm:GetParameter",
+      "Resource": "*",
+      "Condition": {
+        "StringNotEquals": {
+          "ssm:resourceTag/env": "dev"
+        }
+      }
+    }
+  ]
+}
