@@ -1,3 +1,10 @@
+## [0.1.172](https://github.com/act-security-labs/iam-lens/compare/v0.1.171...v0.1.172) (2026-10-23)
+
+
+### Bug Fixes
+
+* run PR checks safely for fork contributions ([#226](https://github.com/act-security-labs/iam-lens/issues/226)) ([33325fb](https://github.com/act-security-labs/iam-lens/commit/33325fbc3772bcae065e7f608fc5fc7fa147ed92))
+
 ## [0.1.171](https://github.com/act-security-labs/iam-lens/compare/v0.1.170...v0.1.171) (2026-10-15)
 
 
