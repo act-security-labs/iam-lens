@@ -123,8 +123,8 @@
     "@actsecurity/iam-expand": "^0.11.29",
     "@actsecurity/iam-policy": "^0.1.89",
     "@actsecurity/iam-shrink": "^0.1.21",
-    "@actsecurity/iam-simulate": "^0.1.166",
-    "@actsecurity/iam-utils": "^0.1.78",
+    "@actsecurity/iam-simulate": "^0.1.189",
+    "@actsecurity/iam-utils": "^0.1.90",
     "@actsecurity/job": "^0.1.65",
     "@actsecurity/log": "^0.1.60",
     "bitset": "^5.2.3"

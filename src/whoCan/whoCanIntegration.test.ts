@@ -1735,13 +1735,6 @@ const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
     expected: {
       who: [
         {
-          principal: 'anonymous',
-          service: 'sts',
-          action: 'AssumeRole',
-          level: 'write',
-          resourceType: 'role'
-        },
-        {
           action: 'AssumeRole',
           principal: 'arn:aws:iam::400000000001:role/alpha-role',
           service: 'sts',
@@ -1932,13 +1925,6 @@ const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
     },
     expected: {
       who: [
-        {
-          principal: 'anonymous',
-          service: 'sts',
-          action: 'AssumeRole',
-          level: 'write',
-          resourceType: 'role'
-        },
         {
           action: 'AssumeRole',
           principal: 'arn:aws:iam::400000000001:role/alpha-role',
@@ -2972,13 +2958,6 @@ const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
     expected: {
       allAccountsChecked: true,
       who: [
-        {
-          principal: 'anonymous',
-          service: 'sts',
-          action: 'AssumeRole',
-          level: 'write',
-          resourceType: 'role'
-        },
         {
           action: 'AssumeRole',
           principal: 'arn:aws:iam::400000000001:role/alpha-role',
