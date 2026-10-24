@@ -4,8 +4,16 @@ import {
   RunSimulationResults
 } from '@actsecurity/iam-simulate'
 import { describe, expect, it } from 'vitest'
+import { type IamCollectClient } from '../collect/client.js'
 import { getTestDatasetClient } from '../test-datasets/testClient.js'
-import { simulateRequest, SimulationRequest } from './simulate.js'
+import {
+  simulateExternalPrincipalRequest,
+  simulateRequest,
+  simulateVirtualPrincipal,
+  SimulationRequest
+} from './simulate.js'
+
+type IntegrationSimulationVariant = 'normal' | 'externalPrincipal' | 'virtualPrincipal'
 
 const simulateIntegrationTest: {
   only?: true
@@ -13,6 +21,7 @@ const simulateIntegrationTest: {
   comment?: string
 
   data: string
+  variant?: IntegrationSimulationVariant
   request: SimulationRequest
 
   expected: EvaluationResult
@@ -1001,6 +1010,101 @@ const simulateIntegrationTest: {
     expectedConditions: undefined
   },
   {
+    name: 'root principal can use a same-account KMS key whose key policy delegates to its account',
+    data: '2',
+    request: {
+      resourceArn: 'arn:aws:kms:us-east-1:400000000002:key/test-key-account-root',
+      resourceAccount: undefined,
+      action: 'kms:Decrypt',
+      principal: 'arn:aws:iam::400000000002:root',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'Allowed'
+  },
+  {
+    name: 'root principal cannot assume a same-account role even when the trust policy allows its account',
+    data: '2',
+    request: {
+      resourceArn: 'arn:aws:iam::400000000002:role/account-root-trust-target',
+      resourceAccount: undefined,
+      action: 'sts:AssumeRole',
+      principal: 'arn:aws:iam::400000000002:root',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'ImplicitlyDenied'
+  },
+  {
+    name: 'root principal cannot assume a cross-account role even when the trust policy allows its account',
+    data: '2',
+    request: {
+      resourceArn: 'arn:aws:iam::400000000002:role/mixed-service-iam-target',
+      resourceAccount: undefined,
+      action: 'sts:AssumeRole',
+      principal: 'arn:aws:iam::400000000001:root',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'ImplicitlyDenied'
+  },
+  {
+    name: 'external root principal can use a KMS key that allows its account',
+    data: '2',
+    variant: 'externalPrincipal',
+    request: {
+      resourceArn: 'arn:aws:kms:us-east-1:400000000002:key/test-key-account-root',
+      resourceAccount: undefined,
+      action: 'kms:Decrypt',
+      principal: 'arn:aws:iam::400000000002:root',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'Allowed'
+  },
+  {
+    name: 'external root principal cannot assume a role even when its trust policy allows the account',
+    data: '2',
+    variant: 'externalPrincipal',
+    request: {
+      resourceArn: 'arn:aws:iam::400000000002:role/account-root-trust-target',
+      resourceAccount: undefined,
+      action: 'sts:AssumeRole',
+      principal: 'arn:aws:iam::400000000002:root',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'ImplicitlyDenied'
+  },
+  {
+    name: 'virtual root principal can use a KMS key that allows its account',
+    data: '2',
+    variant: 'virtualPrincipal',
+    request: {
+      resourceArn: 'arn:aws:kms:us-east-1:400000000002:key/test-key-account-root',
+      resourceAccount: undefined,
+      action: 'kms:Decrypt',
+      principal: 'arn:aws:iam::400000000002:root',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'Allowed'
+  },
+  {
+    name: 'virtual root principal cannot assume a role even when its trust policy allows the account',
+    data: '2',
+    variant: 'virtualPrincipal',
+    request: {
+      resourceArn: 'arn:aws:iam::400000000002:role/account-root-trust-target',
+      resourceAccount: undefined,
+      action: 'sts:AssumeRole',
+      principal: 'arn:aws:iam::400000000002:root',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'ImplicitlyDenied'
+  },
+  {
     name: 'Strict mode denies an absent tag even when a session could supply it',
     data: '3',
     request: {
@@ -1016,6 +1120,32 @@ const simulateIntegrationTest: {
   }
 ]
 
+/**
+ * Execute the selected public simulation entry point with a shared integration-test request.
+ *
+ * @param variant the public iam-lens simulation variant to run
+ * @param request the request common to every tested variant
+ * @param collectClient the dataset-backed IAM collection client
+ * @returns the normalized simulation request and result
+ */
+async function runIntegrationSimulation(
+  variant: IntegrationSimulationVariant,
+  request: SimulationRequest,
+  collectClient: IamCollectClient
+) {
+  switch (variant) {
+    case 'externalPrincipal': {
+      return simulateExternalPrincipalRequest(request, collectClient)
+    }
+    case 'virtualPrincipal': {
+      return simulateVirtualPrincipal(request, collectClient)
+    }
+    case 'normal': {
+      return simulateRequest(request, collectClient)
+    }
+  }
+}
+
 describe('simulateIntegrationTest', () => {
   for (const test of simulateIntegrationTest) {
     const { name, only, data, request, expected } = test
@@ -1028,12 +1158,16 @@ describe('simulateIntegrationTest', () => {
       if (test.expectedError) {
         //If an error is expected
         // Then it should match the expected error
-        await expect(simulateRequest(request, collectClient)).rejects.toThrow(
-          new RegExp('/' + test.expectedError + '/')
-        )
+        await expect(
+          runIntegrationSimulation(test.variant ?? 'normal', request, collectClient)
+        ).rejects.toThrow(new RegExp('/' + test.expectedError + '/'))
       } else {
         // When we run the simulation
-        const { result } = await simulateRequest(request, collectClient)
+        const { result } = await runIntegrationSimulation(
+          test.variant ?? 'normal',
+          request,
+          collectClient
+        )
 
         // Then the result should not have errors
         assertSuccessfulResult(result)

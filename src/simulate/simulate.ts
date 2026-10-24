@@ -14,6 +14,7 @@ import {
   isAssumedRoleArn,
   isIamRoleArn,
   isIamUserArn,
+  isRootArn,
   isS3BucketOrObjectArn,
   splitArnParts
 } from '@actsecurity/iam-utils'
@@ -439,7 +440,8 @@ async function simulateRequestInternal(
   }
 
   const requiresCollectedPrincipal =
-    variant === 'normal' || variant === 'externalResource' || variant === 'virtualResource'
+    (variant === 'normal' || variant === 'externalResource' || variant === 'virtualResource') &&
+    !isRootArn(simulationRequest.principal ?? '')
   if (requiresCollectedPrincipal) {
     const principalFound = await principalExists(simulationRequest.principal!, collectClient)
     if (!principalFound) {
@@ -483,7 +485,10 @@ async function simulateRequestInternal(
     service,
     simulationRequest.customContextKeys,
     principalArnForContext,
-    { includePrincipalTags: requiresCollectedPrincipal, includeResourceMetadata }
+    {
+      includePrincipalTags: requiresCollectedPrincipal,
+      includeResourceMetadata
+    }
   )
 
   const vpcEndpointPolicy = await getVpcEndpointPolicy(collectClient, contextKeys)
@@ -547,9 +552,11 @@ async function simulateRequestInternal(
  * Build all principal-side policy inputs for the selected simulation variant.
  *
  * Collected-principal variants prepare collected identity policies, SCPs, and permission
- * boundaries. External principals receive only a synthetic administrator identity policy, virtual
- * principals receive a synthetic or caller-provided identity policy plus captured organization
- * policies, and anonymous requests receive no principal-side policies.
+ * boundaries. Root principals receive the synthetic administrator identity policy plus their
+ * account's organization policies because they are not stored IAM identities. External principals
+ * receive only a synthetic administrator identity policy, virtual principals receive a synthetic or
+ * caller-provided identity policy plus captured organization policies, and anonymous requests
+ * receive no principal-side policies.
  *
  * @param variant the simulation policy-source variant
  * @param request the normalized request
@@ -588,6 +595,20 @@ async function principalPoliciesForVariant(
           ? { name: 'iam-lens:virtual-inline-policy', policy: request.inlinePolicy }
           : syntheticIdentityPolicy
       ],
+      serviceControlPolicies,
+      permissionBoundaryPolicies: undefined,
+      principalAccountRcps
+    }
+  }
+
+  if (isRootArn(principalArn)) {
+    const accountId = splitArnParts(principalArn).accountId!
+    const [serviceControlPolicies, principalAccountRcps] = await Promise.all([
+      collectClient.getScpHierarchyForAccount(accountId),
+      collectClient.getRcpHierarchyForAccount(accountId)
+    ])
+    return {
+      identityPolicies: [syntheticIdentityPolicy],
       serviceControlPolicies,
       permissionBoundaryPolicies: undefined,
       principalAccountRcps
