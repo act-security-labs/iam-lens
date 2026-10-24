@@ -3,7 +3,7 @@ import { assert, describe, expect, it, vi } from 'vitest'
 import { testStore } from '../collect/inMemoryClient.js'
 import { saveRole, saveUser } from '../utils/testUtils.js'
 import {
-  discoveryConstraintForStrictKey,
+  discoveryConstraintForGeneratedKey,
   mergeDiscoveryContextKeyConstraints,
   resultMatchesExpectation,
   simulateExternalResourceRequest,
@@ -973,7 +973,7 @@ describe('role session-tag Discovery constraints', () => {
   })
 })
 
-describe('aws:userid strict context key behavior', () => {
+describe('aws:userid context-key certainty behavior', () => {
   const useridConditionPolicy = [
     {
       PolicyName: 'ConditionalAccess',
@@ -1197,7 +1197,7 @@ describe('caller-provided Discovery context keys', () => {
     expect(result.overallResult).toBe('ImplicitlyDenied')
   })
 
-  it('should treat strict keys as authoritatively absent for anonymous requests', () => {
+  it('should treat generated keys as authoritatively absent for anonymous requests', () => {
     //Given an anonymous Discovery request without principal or service-source context
     const request = {
       simulationMode: 'Discovery' as const,
@@ -1218,7 +1218,7 @@ describe('caller-provided Discovery context keys', () => {
       'aws:SourceArn',
       'kms:CallerAccount',
       '/^aws:PrincipalTag\/.*/'
-    ].map((keyName) => discoveryConstraintForStrictKey(keyName, request))
+    ].map((keyName) => discoveryConstraintForGeneratedKey(keyName, request))
 
     //Then their absence and values should be authoritative
     expect(constraints).toEqual([
@@ -1262,7 +1262,7 @@ describe('caller-provided Discovery context keys', () => {
     }
 
     // When resolving the constraint for the canonical key spelling
-    const constraint = discoveryConstraintForStrictKey('kms:CallerAccount', request)
+    const constraint = discoveryConstraintForGeneratedKey('kms:CallerAccount', request)
 
     // Then the caller-supplied value should be authoritative
     expect(constraint).toEqual({
@@ -1282,27 +1282,10 @@ describe('caller-provided Discovery context keys', () => {
     }
 
     //When resolving its Discovery constraint
-    const constraint = discoveryConstraintForStrictKey(keyName, request, new Set([keyName]))
+    const constraint = discoveryConstraintForGeneratedKey(keyName, request, new Set([keyName]))
 
     //Then its baseline presence is known but its effective value is not
     expect(constraint).toEqual({ keyName, presenceIsKnown: true, valueIsKnown: false })
-  })
-
-  it('should let an explicit strict key override role-session tag mutability', () => {
-    //Given a mutable stored PrincipalTag that the caller explicitly marks strict
-    const keyName = 'aws:PrincipalTag/Department'
-    const request = {
-      simulationMode: 'Discovery' as const,
-      principal: 'arn:aws:iam::123456789012:role/TaggedRole',
-      customContextKeys: {},
-      additionalStrictContextKeys: [keyName]
-    }
-
-    //When resolving its Discovery constraint
-    const constraint = discoveryConstraintForStrictKey(keyName, request, new Set([keyName]))
-
-    //Then explicit strictness keeps its presence and value authoritative
-    expect(constraint).toEqual({ keyName, presenceIsKnown: true, valueIsKnown: true })
   })
 })
 

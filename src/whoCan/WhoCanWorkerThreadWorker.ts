@@ -112,7 +112,7 @@ function createJobRunner(collectClient: IamCollectClient) {
             s3AbacOverride,
             collectDenyDetails: workItem.collectDenyDetails,
             collectGrantDetails,
-            strictContextKeys: workItem.strictContextKeys
+            discoveryContextKeyConstraints: workItem.discoveryContextKeyConstraints
           })
         }
       }

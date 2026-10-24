@@ -20,8 +20,9 @@ describe('simulation request type contracts', () => {
     expectTypeOf<SimulateRequestResult['request']>().toEqualTypeOf<Simulation['request']>()
   })
 
-  it('should remove the legacy ignoreMissingPrincipal option', () => {
+  it('should remove legacy request options', () => {
     expectTypeOf<SimulationRequest>().not.toHaveProperty('ignoreMissingPrincipal')
+    expectTypeOf<SimulationRequest>().not.toHaveProperty('additionalStrictContextKeys')
   })
 
   it('should accept iam-simulate Discovery context-key constraints', () => {

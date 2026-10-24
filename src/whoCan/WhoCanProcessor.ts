@@ -1,5 +1,6 @@
 import { iamActionDetails } from '@actsecurity/iam-data'
 import { type TopLevelConfig } from '@actsecurity/iam-collect'
+import { type DiscoveryContextKeyConstraint } from '@actsecurity/iam-simulate'
 import { type ValidatedPolicy } from '@actsecurity/iam-policy'
 import { type JobResult, numberOfCpus, StreamingJobQueue } from '@actsecurity/job'
 import { Worker } from 'worker_threads'
@@ -158,8 +159,8 @@ export interface WhoCanProcessorRequest {
   /** Optional scope to limit the set of principals tested. */
   principalScope?: WhoCanPrincipalScope
 
-  /** Optional context keys to consider strict when running simulations. */
-  strictContextKeys?: string[]
+  /** Caller-provided Discovery context-key certainty constraints for each simulation. */
+  discoveryContextKeyConstraints?: DiscoveryContextKeyConstraint[]
 }
 
 /**
@@ -941,7 +942,7 @@ export class WhoCanProcessor {
           resource,
           resourceAccount,
           action,
-          strictContextKeys: request.strictContextKeys,
+          discoveryContextKeyConstraints: request.discoveryContextKeyConstraints,
           collectDenyDetails: !!state.denyDetailsCallback
         })
         state.created++
@@ -1039,7 +1040,7 @@ export class WhoCanProcessor {
                   action,
                   principal,
                   resourceAccount,
-                  strictContextKeys: state.request.strictContextKeys,
+                  discoveryContextKeyConstraints: state.request.discoveryContextKeyConstraints,
                   collectDenyDetails: !!state.denyDetailsCallback
                 })
                 state.created++
@@ -1082,7 +1083,7 @@ export class WhoCanProcessor {
                     action,
                     principal,
                     resourceAccount,
-                    strictContextKeys: state.request.strictContextKeys,
+                    discoveryContextKeyConstraints: state.request.discoveryContextKeyConstraints,
                     collectDenyDetails: !!state.denyDetailsCallback
                   })
                   state.created++
@@ -1121,7 +1122,7 @@ export class WhoCanProcessor {
                   action,
                   principal,
                   resourceAccount,
-                  strictContextKeys: state.request.strictContextKeys,
+                  discoveryContextKeyConstraints: state.request.discoveryContextKeyConstraints,
                   collectDenyDetails: !!state.denyDetailsCallback
                 })
                 state.created++
@@ -1143,7 +1144,7 @@ export class WhoCanProcessor {
                     principal,
                     resultPrincipal: resolvedPrincipal,
                     resourceAccount,
-                    strictContextKeys: state.request.strictContextKeys,
+                    discoveryContextKeyConstraints: state.request.discoveryContextKeyConstraints,
                     collectDenyDetails: !!state.denyDetailsCallback
                   })
                   state.created++
