@@ -1,6 +1,7 @@
 import { iamActionDetails } from '@actsecurity/iam-data'
 import {
   type AllowedConditionExpression,
+  type DiscoveryContextKeyConstraint,
   type EvaluationResult,
   getGrantReasons,
   type IgnoredConditions,
@@ -18,9 +19,16 @@ import { log } from '@actsecurity/log'
  * Shared scheduling settings for a who-can scenario.
  */
 interface BaseWhoCanWorkItem {
+  /** Account that owns the resource being evaluated, when applicable. */
   resourceAccount: string | undefined
+
+  /** IAM action evaluated by this scheduled simulation. */
   action: string
-  strictContextKeys: string[] | undefined
+
+  /** Caller-provided Discovery context-key certainty constraints. */
+  discoveryContextKeyConstraints: DiscoveryContextKeyConstraint[] | undefined
+
+  /** Whether this simulation should return deny analysis. */
   collectDenyDetails: boolean
 }
 
@@ -140,10 +148,17 @@ export function createJobForWhoCanWorkItem(
 }
 
 export interface WhoCanOptions {
+  /** Overrides collected S3 ABAC settings for simulations. */
   s3AbacOverride?: S3AbacOverride
+
+  /** Enables denial analysis for simulated denials. */
   collectDenyDetails?: boolean
+
+  /** Enables grant details for allowed simulations. */
   collectGrantDetails?: boolean
-  strictContextKeys?: string[]
+
+  /** Caller-provided Discovery context-key certainty constraints. */
+  discoveryContextKeyConstraints?: DiscoveryContextKeyConstraint[]
 }
 
 /**
@@ -174,7 +189,7 @@ export async function executeWhoCan(
       customContextKeys: {},
       simulationMode,
       s3AbacOverride: whoCanOptions.s3AbacOverride,
-      additionalStrictContextKeys: whoCanOptions.strictContextKeys
+      discoveryContextKeyConstraints: whoCanOptions.discoveryContextKeyConstraints
     }
     if (workItem.simulationVariant === 'anonymous') {
       // Read the narrowed resource again so anonymous requests require a defined ARN/pattern.

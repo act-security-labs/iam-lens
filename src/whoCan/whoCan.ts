@@ -18,6 +18,7 @@ import {
 } from '@actsecurity/iam-policy'
 import {
   type AllowedConditionExpression,
+  type DiscoveryContextKeyConstraint,
   type IgnoredConditions,
   type RequestDenial,
   type RequestGrant
@@ -109,10 +110,9 @@ export interface ResourceAccessRequest {
   collectGrantDetails?: boolean
 
   /**
-   * Optional context keys to consider strict when running simulations for this whoCan request.
-   * These will be added to the simulation strict context keys used by default.
+   * Caller-provided Discovery context-key certainty constraints for every simulation in this request.
    */
-  strictContextKeys?: string[]
+  discoveryContextKeyConstraints?: DiscoveryContextKeyConstraint[]
 
   /**
    * Optional plugin to wrap the collect client with a custom implementation.
@@ -353,7 +353,7 @@ export async function whoCan(
       sort: request.sort,
       denyDetailsCallback: request.denyDetailsCallback,
       principalScope: request.principalScope,
-      strictContextKeys: request.strictContextKeys
+      discoveryContextKeyConstraints: request.discoveryContextKeyConstraints
     })
 
     await processor.waitForIdle()

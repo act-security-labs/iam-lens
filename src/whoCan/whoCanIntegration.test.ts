@@ -916,7 +916,7 @@ const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
     }
   },
   {
-    name: 'ListBucket with condition and no strictContextKeys',
+    name: 'ListBucket with condition and no Discovery context-key constraint',
     simulationCounts: { withoutIndex: 6, withIndex: 4 },
     data: '1',
     request: {
@@ -945,13 +945,15 @@ const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
     }
   },
   {
-    name: 'ListBucket with condition and strictContextKeys aws:SourceVpc',
+    name: 'ListBucket with condition and fully-known aws:SourceVpc constraint',
     simulationCounts: { withoutIndex: 6, withIndex: 4 },
     data: '1',
     request: {
       resource: 'arn:aws:s3:::vpc-bucket',
       actions: ['s3:ListBucket'],
-      strictContextKeys: ['aws:SourceVpc'],
+      discoveryContextKeyConstraints: [
+        { keyName: 'aws:SourceVpc', presenceIsKnown: true, valueIsKnown: true }
+      ],
       denyDetailsCallback: (details) => details.overallResult === 'ImplicitlyDenied'
     },
     expected: {
@@ -3825,7 +3827,7 @@ async function runParallelProcessorTest(
         resource: request.resource,
         resourceAccount: request.resourceAccount,
         principalScope: request.principalScope,
-        strictContextKeys: request.strictContextKeys,
+        discoveryContextKeyConstraints: request.discoveryContextKeyConstraints,
         denyDetailsCallback: request.denyDetailsCallback
       })
       requestIdMap.set(requestId, { testIndex: i, testName: name })
