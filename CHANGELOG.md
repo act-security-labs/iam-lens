@@ -1,3 +1,10 @@
+## [0.1.173](https://github.com/act-security-labs/iam-lens/compare/v0.1.172...v0.1.173) (2026-10-24)
+
+
+### Bug Fixes
+
+* support root principals ([#227](https://github.com/act-security-labs/iam-lens/issues/227)) ([fc0480c](https://github.com/act-security-labs/iam-lens/commit/fc0480cd6212377b94f5173545a7932315c99bf9))
+
 ## [0.1.172](https://github.com/act-security-labs/iam-lens/compare/v0.1.171...v0.1.172) (2026-10-23)
 
 
