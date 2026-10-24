@@ -1,3 +1,10 @@
+## [0.1.174](https://github.com/act-security-labs/iam-lens/compare/v0.1.173...v0.1.174) (2026-10-24)
+
+
+### Features
+
+* remove strict context key options ([#228](https://github.com/act-security-labs/iam-lens/issues/228)) ([953757e](https://github.com/act-security-labs/iam-lens/commit/953757e3e1349d894c5eed31e5e9c49292f8266a))
+
 ## [0.1.173](https://github.com/act-security-labs/iam-lens/compare/v0.1.172...v0.1.173) (2026-10-24)
 
 
