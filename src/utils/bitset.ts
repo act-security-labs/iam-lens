@@ -6,7 +6,7 @@ import BitSet from 'bitset'
  * @param bitset the BitSet to encode
  * @returns the encoded representation
  */
-export function encodeBitSet(bitset: BitSet): any {
+export function encodeBitSet(bitset: BitSet.BitSet): any {
   const rawHex = bitset.toString(16)
   const compressedHex = compressHex(rawHex)
   const sparseString = ',' + bitset.toArray().join(',')
@@ -28,7 +28,7 @@ export function encodeBitSet(bitset: BitSet): any {
  * @param encoded the encoded representation
  * @returns the decoded BitSet
  */
-export function decodeBitSet(encoded: any): BitSet {
+export function decodeBitSet(encoded: any): BitSet.BitSet {
   if (Array.isArray(encoded)) {
     const bitset = new BitSet()
     bitset.setRange(encoded[0], encoded[1], 1)
