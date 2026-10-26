@@ -1,0 +1,25 @@
+[
+  {
+    "PolicyDocument": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Action": "ec2:TerminateInstances",
+          "Resource": "*",
+          "Condition": {
+            "StringEquals": {
+              "ec2:ResourceTag/env": "dev"
+            }
+          }
+        },
+        {
+          "Effect": "Allow",
+          "Action": ["secretsmanager:DescribeSecret", "ssm:GetParameter"],
+          "Resource": "*"
+        }
+      ]
+    },
+    "PolicyName": "Operator"
+  }
+]

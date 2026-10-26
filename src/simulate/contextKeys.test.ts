@@ -1194,6 +1194,62 @@ describe('createContextKeys', () => {
     })
   })
 
+  describe('service-prefixed resource tag keys', () => {
+    it.each([
+      {
+        action: 'ec2-instance-connect:SendSSHPublicKey',
+        resourceArn: 'arn:aws:ec2:us-east-1:123456789012:instance/i-0123456789abcdef0',
+        expectedTagKeys: ['aws:ResourceTag/env', 'ec2:ResourceTag/env']
+      },
+      {
+        action: 'sts:AssumeRole',
+        resourceArn: 'arn:aws:iam::123456789012:role/Target',
+        expectedTagKeys: ['aws:ResourceTag/env', 'iam:ResourceTag/env']
+      },
+      {
+        action: 'ssm:GetParameter',
+        resourceArn: 'arn:aws:ssm:us-east-1:123456789012:parameter/db',
+        expectedTagKeys: ['aws:ResourceTag/env', 'ssm:resourceTag/env']
+      },
+      {
+        action: 'secretsmanager:GetSecretValue',
+        resourceArn: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:db-AbCdEf',
+        expectedTagKeys: ['aws:ResourceTag/env', 'secretsmanager:ResourceTag/env']
+      },
+      {
+        action: 'lambda:InvokeFunction',
+        resourceArn: 'arn:aws:lambda:us-east-1:123456789012:function:handler',
+        expectedTagKeys: ['aws:ResourceTag/env']
+      }
+    ])(
+      'should set the resource tag keys $action names, with iam-data casing',
+      async ({ action, resourceArn, expectedTagKeys }) => {
+        // Given a resource tagged env=dev
+        const { store, client } = testStore()
+        await store.saveResourceMetadata('123456789012', resourceArn, 'tags', { env: 'dev' })
+        const simulationRequest: SimulationRequest = {
+          ...defaultSimulationRequest,
+          action,
+          resourceArn,
+          resourceAccount: '123456789012'
+        }
+
+        // When creating context keys
+        const { contextKeys } = await createContextKeys(
+          client,
+          simulationRequest,
+          action.split(':')[0],
+          {}
+        )
+
+        // Then every resource tag key the action names should carry the tag's value
+        const tagKeys = Object.keys(contextKeys).filter((key) => /:resourcetag\//i.test(key))
+        expect(tagKeys.sort()).toEqual(expectedTagKeys)
+        expect(tagKeys.map((key) => contextKeys[key])).toEqual(tagKeys.map(() => 'dev'))
+      }
+    )
+  })
+
   describe('aws:SecureTransport', () => {
     it('should always set aws:SecureTransport to true', async () => {
       // Given a simulation request
