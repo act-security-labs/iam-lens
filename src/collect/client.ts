@@ -20,7 +20,7 @@ import {
 } from '@actsecurity/iam-utils'
 import BitSet from 'bitset'
 import { gunzipSync, gzipSync } from 'zlib'
-import { decodeBitSet, decompressPrincipalString } from '../utils/bitset.js'
+import { decodeBitSet, decompressPrincipalString, type BitSetInstance } from '../utils/bitset.js'
 
 //TODO: Import this from iam-simulate
 export interface SimulationOrgPolicies {
@@ -153,16 +153,16 @@ type Service = string
 type Action = string
 
 export type ServiceIamActionCache = {
-  action?: Record<Action, InstanceType<typeof BitSet>>
-  notAction?: Record<Action, InstanceType<typeof BitSet>>
+  action?: Record<Action, BitSetInstance>
+  notAction?: Record<Action, BitSetInstance>
 }
 
 export type IamActionCache = {
   prefix: string
   principals: string[]
   accounts: Record<string, number[]>
-  action: Record<Service, Record<Action, InstanceType<typeof BitSet>>>
-  notAction: Record<Service, Record<Action, InstanceType<typeof BitSet>>>
+  action: Record<Service, Record<Action, BitSetInstance>>
+  notAction: Record<Service, Record<Action, BitSetInstance>>
 }
 
 /**
