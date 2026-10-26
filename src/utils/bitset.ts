@@ -1,12 +1,17 @@
 import BitSet from 'bitset'
 
 /**
+ * A BitSet instance compatible with every supported version of the bitset package.
+ */
+export type BitSetInstance = InstanceType<typeof BitSet>
+
+/**
  * Encode a BitSet into a more compact representation
  *
  * @param bitset the BitSet to encode
  * @returns the encoded representation
  */
-export function encodeBitSet(bitset: BitSet): any {
+export function encodeBitSet(bitset: BitSetInstance): any {
   const rawHex = bitset.toString(16)
   const compressedHex = compressHex(rawHex)
   const sparseString = ',' + bitset.toArray().join(',')
@@ -28,7 +33,7 @@ export function encodeBitSet(bitset: BitSet): any {
  * @param encoded the encoded representation
  * @returns the decoded BitSet
  */
-export function decodeBitSet(encoded: any): BitSet {
+export function decodeBitSet(encoded: any): BitSetInstance {
   if (Array.isArray(encoded)) {
     const bitset = new BitSet()
     bitset.setRange(encoded[0], encoded[1], 1)
