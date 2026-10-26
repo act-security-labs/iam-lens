@@ -1,3 +1,10 @@
+## [0.1.175](https://github.com/act-security-labs/iam-lens/compare/v0.1.174...v0.1.175) (2026-10-26)
+
+
+### Bug Fixes
+
+* fill service-prefixed resource tag keys ([#231](https://github.com/act-security-labs/iam-lens/issues/231)) ([7381776](https://github.com/act-security-labs/iam-lens/commit/73817769a13bde4212e2e96b33c451e901a7b9fd))
+
 ## [0.1.174](https://github.com/act-security-labs/iam-lens/compare/v0.1.173...v0.1.174) (2026-10-24)
 
 
