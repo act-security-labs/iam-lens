@@ -1,6 +1,0 @@
-{
-  "r-cd34": {
-    "rcps": [],
-    "scps": ["arn:aws:organizations::aws:policy/service_control_policy/p-FullAWSAccess"]
-  }
-}

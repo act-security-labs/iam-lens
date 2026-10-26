@@ -1,0 +1,4 @@
+{
+  "arn": "arn:aws:ssm:us-east-1:400000000002:parameter/prod/db-host",
+  "name": "/prod/db-host"
+}

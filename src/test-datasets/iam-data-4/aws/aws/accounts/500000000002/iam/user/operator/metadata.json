@@ -1,7 +1,0 @@
-{
-  "arn": "arn:aws:iam::500000000002:user/operator",
-  "created": "2025-01-01T00:00:00.000Z",
-  "id": "AIDA0000OPERATOR0002",
-  "name": "operator",
-  "path": "/"
-}
