@@ -153,16 +153,16 @@ type Service = string
 type Action = string
 
 export type ServiceIamActionCache = {
-  action?: Record<Action, BitSet.BitSet>
-  notAction?: Record<Action, BitSet.BitSet>
+  action?: Record<Action, InstanceType<typeof BitSet>>
+  notAction?: Record<Action, InstanceType<typeof BitSet>>
 }
 
 export type IamActionCache = {
   prefix: string
   principals: string[]
   accounts: Record<string, number[]>
-  action: Record<Service, Record<Action, BitSet.BitSet>>
-  notAction: Record<Service, Record<Action, BitSet.BitSet>>
+  action: Record<Service, Record<Action, InstanceType<typeof BitSet>>>
+  notAction: Record<Service, Record<Action, InstanceType<typeof BitSet>>>
 }
 
 /**
