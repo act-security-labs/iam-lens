@@ -1,3 +1,10 @@
+## [0.1.176](https://github.com/act-security-labs/iam-lens/compare/v0.1.175...v0.1.176) (2026-10-26)
+
+
+### Bug Fixes
+
+* support updated bitset declarations ([#230](https://github.com/act-security-labs/iam-lens/issues/230)) ([fbb28b8](https://github.com/act-security-labs/iam-lens/commit/fbb28b805b6de8920e468bde87906f089b2eef23))
+
 ## [0.1.175](https://github.com/act-security-labs/iam-lens/compare/v0.1.174...v0.1.175) (2026-10-26)
 
 
