@@ -100,18 +100,31 @@ export const CONTEXT_KEYS = {
   vpcArn: 'aws:SourceVpcArn'
 }
 
+/** Context keys AWS leaves absent on every unsigned request iam-lens currently models. */
+export const anonymousKnownAbsentContextKeyNames = [
+  'aws:CalledVia',
+  'aws:CalledViaFirst',
+  'aws:CalledViaLast',
+  'aws:Ec2InstanceSourcePrivateIPv4',
+  'aws:Ec2InstanceSourceVPC',
+  'aws:FederatedProvider',
+  'aws:MultiFactorAuthAge',
+  'aws:MultiFactorAuthPresent',
+  'aws:PrincipalServiceNamesList',
+  'aws:SourceIdentity',
+  'aws:TokenIssueTime',
+  'aws:ViaAWSService',
+  's3:authType',
+  's3:signatureversion',
+  's3:signatureAge'
+] as const
+
 const anonymousPrincipalContextKeys = new Set([
   'aws:assumedroot',
-  'aws:ec2instancesourceprivateipv4',
-  'aws:ec2instancesourcevpc',
-  'aws:federatedprovider',
-  'aws:multifactorauthage',
-  'aws:multifactorauthpresent',
-  'aws:sourceidentity',
-  'aws:tokenissuetime',
   'aws:username',
   'aws:userid',
-  'kms:calleraccount'
+  'kms:calleraccount',
+  ...anonymousKnownAbsentContextKeyNames.map((key) => key.toLowerCase())
 ])
 
 /**
@@ -185,6 +198,9 @@ export async function createContextKeys(
   if (!principal) {
     contextKeys['aws:userid'] = 'anonymous'
     contextKeys['aws:PrincipalType'] = 'Anonymous'
+    if (service.toLowerCase() === 'sqs') {
+      contextKeys['aws:PrincipalAccount'] = 'anonymous'
+    }
   } else if (isArnPrincipal(principal)) {
     const arnParts = splitArnParts(principal)
     const principalArnForContext =

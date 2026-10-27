@@ -35,6 +35,7 @@ import { type S3AbacOverride } from '../utils/s3Abac.js'
 import { AssumeRoleActions } from '../utils/sts.js'
 import {
   CONTEXT_KEYS,
+  anonymousKnownAbsentContextKeyNames,
   type ContextKeys,
   contextValue,
   createContextKeys,
@@ -783,7 +784,8 @@ function makeGeneratedDiscoveryContextKeyNames(
     generatedContextKeyNames.push(
       CONTEXT_KEYS.userId,
       CONTEXT_KEYS.assumedRoot,
-      '/^aws:PrincipalTag\/.*/'
+      '/^aws:PrincipalTag\/.*/',
+      ...anonymousKnownAbsentContextKeyNames
     )
   } else {
     if (!isIamRoleArn(request.principal)) {
@@ -881,6 +883,7 @@ const anonymousAbsentContextKeys = new Set([
   'aws:sourcearn',
   'aws:assumedroot',
   'kms:calleraccount',
+  ...anonymousKnownAbsentContextKeyNames.map((key) => key.toLowerCase()),
   '/^aws:principaltag\/.*/'
 ])
 

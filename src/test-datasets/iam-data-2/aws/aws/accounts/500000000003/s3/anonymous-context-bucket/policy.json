@@ -15,6 +15,39 @@
       }
     },
     {
+      "Sid": "AllowKnownAbsentContextObject",
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::anonymous-context-bucket/known-absent/all"
+    },
+    {
+      "Sid": "DenyUnsignedRequestsWithKnownAbsentContext",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::anonymous-context-bucket/known-absent/all",
+      "Condition": {
+        "Null": {
+          "aws:CalledVia": "true",
+          "aws:CalledViaFirst": "true",
+          "aws:CalledViaLast": "true",
+          "aws:Ec2InstanceSourcePrivateIPv4": "true",
+          "aws:Ec2InstanceSourceVPC": "true",
+          "aws:FederatedProvider": "true",
+          "aws:MultiFactorAuthAge": "true",
+          "aws:MultiFactorAuthPresent": "true",
+          "aws:PrincipalServiceNamesList": "true",
+          "aws:SourceIdentity": "true",
+          "aws:TokenIssueTime": "true",
+          "aws:ViaAWSService": "true",
+          "s3:authType": "true",
+          "s3:signatureversion": "true",
+          "s3:signatureAge": "true"
+        }
+      }
+    },
+    {
       "Sid": "AllowNonAnonymousPrincipalType",
       "Effect": "Allow",
       "Principal": "*",

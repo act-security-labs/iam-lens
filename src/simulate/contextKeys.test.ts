@@ -112,6 +112,46 @@ describe('createContextKeys', () => {
       //Then aws:PrincipalAccount should not be set
       expect(contextKeys['aws:PrincipalAccount']).toBeUndefined()
     })
+
+    it('should set aws:PrincipalAccount to anonymous for unsigned SQS requests', async () => {
+      //Given an unsigned request to SQS
+      const simulationRequest: InternalSimulationRequest = {
+        ...defaultSimulationRequest,
+        action: 'sqs:GetQueueAttributes',
+        principal: undefined,
+        resourceArn: 'arn:aws:sqs:us-east-1:123456789012:example-queue'
+      }
+
+      //When creating the SQS request context
+      const { contextKeys } = await createContextKeys(
+        testStore().client,
+        simulationRequest,
+        'sqs',
+        {}
+      )
+
+      //Then AWS's literal anonymous account context is preserved
+      expect(contextKeys['aws:PrincipalAccount']).toBe('anonymous')
+    })
+
+    it('should leave aws:PrincipalAccount absent for unsigned S3 requests', async () => {
+      //Given an unsigned request to S3
+      const simulationRequest: InternalSimulationRequest = {
+        ...defaultSimulationRequest,
+        principal: undefined
+      }
+
+      //When creating the S3 request context
+      const { contextKeys } = await createContextKeys(
+        testStore().client,
+        simulationRequest,
+        's3',
+        {}
+      )
+
+      //Then the account context remains absent
+      expect(contextKeys['aws:PrincipalAccount']).toBeUndefined()
+    })
   })
 
   describe('aws:PrincipalOrgPaths', () => {

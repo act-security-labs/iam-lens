@@ -170,6 +170,18 @@ const anonymousIntegrationCases: AnonymousIntegrationCase[] = [
     expectedGuardrail: 'resource-policy'
   },
   {
+    name: 'sets AWS anonymous PrincipalAccount for unsigned SQS requests',
+    data: '2',
+    request: {
+      resourceArn: 'arn:aws:sqs:us-east-1:500000000003:anonymous-context-queue',
+      resourceAccount: undefined,
+      action: 'sqs:GetQueueAttributes',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed'
+  },
+  {
     name: 'supports Discovery mode without authenticated principal context',
     data: '2',
     request: {
@@ -192,6 +204,19 @@ const anonymousIntegrationCases: AnonymousIntegrationCase[] = [
       simulationMode: 'Discovery'
     },
     expected: 'Allowed'
+  },
+  {
+    name: 'applies a deny when every signed-only context key is known absent',
+    data: '2',
+    request: {
+      resourceArn: 'arn:aws:s3:::anonymous-context-bucket/known-absent/all',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ExplicitlyDenied',
+    expectedGuardrail: 'resource-policy'
   },
   {
     name: 'does not ignore a nonmatching anonymous principal type condition',
