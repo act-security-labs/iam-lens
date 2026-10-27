@@ -1,6 +1,7 @@
 import { type EvaluationResult } from '@actsecurity/iam-simulate'
 import { assert, describe, expect, it, vi } from 'vitest'
 import { testStore } from '../collect/inMemoryClient.js'
+import { anonymousKnownAbsentContextKeyNames } from './contextKeys.js'
 import { saveRole, saveUser } from '../utils/testUtils.js'
 import {
   discoveryConstraintForGeneratedKey,
@@ -1217,7 +1218,8 @@ describe('caller-provided Discovery context keys', () => {
       'aws:userid',
       'aws:SourceArn',
       'kms:CallerAccount',
-      '/^aws:PrincipalTag\/.*/'
+      '/^aws:PrincipalTag\/.*/',
+      ...anonymousKnownAbsentContextKeyNames
     ].map((keyName) => discoveryConstraintForGeneratedKey(keyName, request))
 
     //Then their absence and values should be authoritative
@@ -1244,7 +1246,12 @@ describe('caller-provided Discovery context keys', () => {
         keyName: '/^aws:PrincipalTag\/.*/',
         presenceIsKnown: true,
         valueIsKnown: true
-      }
+      },
+      ...anonymousKnownAbsentContextKeyNames.map((keyName) => ({
+        keyName,
+        presenceIsKnown: true,
+        valueIsKnown: true
+      }))
     ])
   })
 

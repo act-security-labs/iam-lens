@@ -1,0 +1,17 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowAnonymousSqsPrincipalAccount",
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": "sqs:GetQueueAttributes",
+      "Resource": "arn:aws:sqs:us-east-1:500000000003:anonymous-context-queue",
+      "Condition": {
+        "StringEquals": {
+          "aws:PrincipalAccount": "anonymous"
+        }
+      }
+    }
+  ]
+}

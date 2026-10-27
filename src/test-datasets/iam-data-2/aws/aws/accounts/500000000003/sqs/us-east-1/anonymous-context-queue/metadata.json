@@ -1,0 +1,5 @@
+{
+  "arn": "arn:aws:sqs:us-east-1:500000000003:anonymous-context-queue",
+  "name": "anonymous-context-queue",
+  "region": "us-east-1"
+}
