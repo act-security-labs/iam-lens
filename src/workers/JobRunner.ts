@@ -13,6 +13,7 @@ export class PullBasedJobRunner<T = void, P = Record<string, unknown>, TaskDetai
 
   private isAcceptingWork = true
   private activeJobs = 0
+  private notificationGeneration = 0
   private workers: Promise<void>[] = []
   private idlePromise:
     | {
@@ -53,12 +54,16 @@ export class PullBasedJobRunner<T = void, P = Record<string, unknown>, TaskDetai
    */
   private async worker(workerId: number): Promise<void> {
     while (true) {
+      const generation = this.notificationGeneration
       const task = await this.getNextTask(workerId)
 
       if (!task) {
         // If no more tasks are available, and we are not accepting work, exit the loop
         if (!this.isAcceptingWork) {
           return
+        }
+        if (generation !== this.notificationGeneration) {
+          continue
         }
         await this.waitForWork()
         continue
@@ -112,6 +117,7 @@ export class PullBasedJobRunner<T = void, P = Record<string, unknown>, TaskDetai
    * Notify the workers that new work is available.
    */
   public notifyWorkAvailable(): void {
+    this.notificationGeneration++
     this.idlePromise?.resolve()
     this.idlePromise = undefined
   }

@@ -724,35 +724,64 @@ export class WhoCanProcessor {
    * Dequeues the next simulation scenario using FIFO request priority.
    * Prefers the oldest active request that has ready scenarios. If the oldest
    * is temporarily empty (still preparing), falls back to the next request
-   * with ready scenarios so cores do not idle. Queued scenarios for failed
-   * requests are canceled and counted as completed without being simulated.
+   * with ready scenarios so cores do not idle. Scenarios belonging to settled
+   * requests are counted as completed without being simulated.
    *
    * @returns the next work item, or undefined if no scenarios are ready.
    */
   private dequeueNextScenario(): (WhoCanWorkItem & { requestId: string }) | undefined {
-    for (const requestId of [...this.activeRequestOrder]) {
+    let index = 0
+    while (index < this.activeRequestOrder.length) {
+      const requestId = this.activeRequestOrder[index]
       const state = this.requestStates.get(requestId)
       if (!state) {
+        index++
         continue
       }
 
-      if (state.settled) {
-        // The request failed after these scenarios were queued. Drain them
-        // without simulation so created/completed remains balanced for cleanup.
-        while (state.scenarios.dequeue()) {
-          state.completed++
+      let skipped = false
+      let item = state.scenarios.dequeue()
+      while (item) {
+        if (!state.settled) {
+          return { ...item, requestId }
         }
-        this.checkRequestDrain(state)
-        continue
+        state.completed++
+        skipped = true
+        item = state.scenarios.dequeue()
       }
 
-      const item = state.scenarios.dequeue()
-      if (item) {
-        return { ...item, requestId }
+      if (skipped) {
+        this.checkRequestDrain(state)
+      }
+      // A drain may remove this request and shift the next one into its place.
+      if (this.activeRequestOrder[index] === requestId) {
+        index++
       }
     }
 
     return undefined
+  }
+
+  /** Whether a scheduler wakeup is already scheduled for this turn. */
+  private simulationNotificationPending = false
+
+  /**
+   * Enqueues runnable work and schedules a coalesced wakeup for simulation consumers.
+   * Work from in-progress preparation jobs remains tracked after settlement.
+   *
+   * @param state - The request that owns the scenario.
+   * @param scenario - The simulation work to enqueue.
+   */
+  private enqueueScenario(state: RequestState, scenario: WhoCanWorkItem): void {
+    state.scenarios.enqueue(scenario)
+    state.created++
+    if (!this.simulationNotificationPending) {
+      this.simulationNotificationPending = true
+      queueMicrotask(() => {
+        this.simulationNotificationPending = false
+        this.notifySimulationConsumers()
+      })
+    }
   }
 
   /**
@@ -866,7 +895,6 @@ export class WhoCanProcessor {
           this.settleRequestAsError(state, err instanceof Error ? err : new Error(String(err)))
         } finally {
           state.pendingPreparationJobs--
-          this.notifySimulationConsumers()
           this.checkRequestCompletion(state)
         }
       }
@@ -950,7 +978,7 @@ export class WhoCanProcessor {
         if ((await iamActionDetails(service, actionName)).isWildcardOnly) {
           continue
         }
-        state.scenarios.enqueue({
+        this.enqueueScenario(state, {
           simulationVariant: 'anonymous',
           principal: 'anonymous',
           resource,
@@ -959,7 +987,6 @@ export class WhoCanProcessor {
           discoveryContextKeyConstraints: request.discoveryContextKeyConstraints,
           collectDenyDetails: !!state.denyDetailsCallback
         })
-        state.created++
       }
     }
 
@@ -1048,7 +1075,7 @@ export class WhoCanProcessor {
                 ) {
                   continue
                 }
-                state.scenarios.enqueue({
+                this.enqueueScenario(state, {
                   simulationVariant: 'authenticated',
                   resource,
                   action,
@@ -1057,11 +1084,8 @@ export class WhoCanProcessor {
                   discoveryContextKeyConstraints: state.request.discoveryContextKeyConstraints,
                   collectDenyDetails: !!state.denyDetailsCallback
                 })
-                state.created++
               }
             }
-
-            this.notifySimulationConsumers()
           } catch (err) {
             this.settleRequestAsError(state, err instanceof Error ? err : new Error(String(err)))
           } finally {
@@ -1091,7 +1115,7 @@ export class WhoCanProcessor {
                   ) {
                     continue
                   }
-                  state.scenarios.enqueue({
+                  this.enqueueScenario(state, {
                     simulationVariant: 'authenticated',
                     resource,
                     action,
@@ -1100,11 +1124,8 @@ export class WhoCanProcessor {
                     discoveryContextKeyConstraints: state.request.discoveryContextKeyConstraints,
                     collectDenyDetails: !!state.denyDetailsCallback
                   })
-                  state.created++
                 }
               }
-
-              this.notifySimulationConsumers()
             } catch (err) {
               this.settleRequestAsError(state, err instanceof Error ? err : new Error(String(err)))
             } finally {
@@ -1130,7 +1151,7 @@ export class WhoCanProcessor {
 
             if (isServicePrincipal(principal)) {
               for (const action of actions) {
-                state.scenarios.enqueue({
+                this.enqueueScenario(state, {
                   simulationVariant: 'authenticated',
                   resource,
                   action,
@@ -1139,7 +1160,6 @@ export class WhoCanProcessor {
                   discoveryContextKeyConstraints: state.request.discoveryContextKeyConstraints,
                   collectDenyDetails: !!state.denyDetailsCallback
                 })
-                state.created++
               }
             } else if (
               isIamUserArn(principal) ||
@@ -1151,7 +1171,7 @@ export class WhoCanProcessor {
                 state.principalsNotFound.push(principal)
               } else {
                 for (const action of actions) {
-                  state.scenarios.enqueue({
+                  this.enqueueScenario(state, {
                     simulationVariant: 'authenticated',
                     resource,
                     action,
@@ -1161,14 +1181,11 @@ export class WhoCanProcessor {
                     discoveryContextKeyConstraints: state.request.discoveryContextKeyConstraints,
                     collectDenyDetails: !!state.denyDetailsCallback
                   })
-                  state.created++
                 }
               }
             } else {
               state.principalsNotFound.push(principal)
             }
-
-            this.notifySimulationConsumers()
           } catch (err) {
             this.settleRequestAsError(state, err instanceof Error ? err : new Error(String(err)))
           } finally {
@@ -1352,7 +1369,7 @@ export class WhoCanProcessor {
   /**
    * Settles a request as failed: invokes onRequestSettled with the error
    * immediately, but keeps the request in active state until queued scenarios
-   * are canceled and in-flight work drains (created === completed). Late
+   * are skipped and in-flight work drains (created === completed). Late
    * results for settled requests are discarded but still counted so the drain
    * completes.
    *
