@@ -1,3 +1,10 @@
+## [0.1.177](https://github.com/act-security-labs/iam-lens/compare/v0.1.176...v0.1.177) (2026-10-27)
+
+
+### Bug Fixes
+
+* drain settled whoCan scenarios ([#232](https://github.com/act-security-labs/iam-lens/issues/232)) ([7d6709d](https://github.com/act-security-labs/iam-lens/commit/7d6709dcda24800c8547fa5cf1114e4a02b7c5ce))
+
 ## [0.1.176](https://github.com/act-security-labs/iam-lens/compare/v0.1.175...v0.1.176) (2026-10-26)
 
 
