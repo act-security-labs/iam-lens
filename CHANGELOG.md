@@ -1,3 +1,10 @@
+## [0.1.178](https://github.com/act-security-labs/iam-lens/compare/v0.1.177...v0.1.178) (2026-10-27)
+
+
+### Bug Fixes
+
+* model unsigned request context ([#233](https://github.com/act-security-labs/iam-lens/issues/233)) ([8290310](https://github.com/act-security-labs/iam-lens/commit/82903109b6e41221f8409b725b4fcfa5c4eac16d))
+
 ## [0.1.177](https://github.com/act-security-labs/iam-lens/compare/v0.1.176...v0.1.177) (2026-10-27)
 
 
