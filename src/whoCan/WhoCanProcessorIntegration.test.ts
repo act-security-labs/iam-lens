@@ -6,6 +6,22 @@ import { join, resolve } from 'path'
 import { fileURLToPath } from 'url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getTestDatasetConfigs } from '../test-datasets/testClient.js'
+
+const principalScopeFailure = vi.hoisted(() => ({ enabled: false }))
+
+vi.mock('./principalScope.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./principalScope.js')>()
+  return {
+    ...actual,
+    resolvePrincipalScope: async (...args: Parameters<typeof actual.resolvePrincipalScope>) => {
+      if (principalScopeFailure.enabled) {
+        throw new Error('principal scope lookup failed')
+      }
+      return actual.resolvePrincipalScope(...args)
+    }
+  }
+})
+
 import {
   WhoCanProcessor,
   type WhoCanProcessorConfig,
@@ -50,6 +66,49 @@ async function runSingleRequest(
   }
 }
 describe('WhoCanProcessor Integration Tests', () => {
+  describe('WhoCanProcessor request draining', () => {
+    it('drains queued scenarios after root preparation fails', async () => {
+      //Given multiple anonymous scenarios are queued before a later principal-scope lookup fails
+      const settledEvents: WhoCanSettledEvent[] = []
+      const processor = await WhoCanProcessor.create({
+        collectConfigs: getTestDatasetConfigs('2'),
+        partition: 'aws',
+        tuning: { workerThreads: 0 },
+        ignorePrincipalIndex: true,
+        onRequestSettled: async (event) => {
+          settledEvents.push(event)
+        }
+      })
+
+      try {
+        principalScopeFailure.enabled = true
+        processor.enqueueWhoCan({
+          resource: 'arn:aws:s3:::no-bpa-public-bucket/report.txt',
+          actions: ['s3:GetObject', 's3:PutObject'],
+          principalScope: { anonymous: true, accounts: ['500000000003'] }
+        })
+
+        //When the caller waits for the failed request to drain
+        const becameIdle = await Promise.race([
+          processor.waitForIdle().then(() => true),
+          new Promise<false>((resolve) => setTimeout(() => resolve(false), 1_000))
+        ])
+
+        //Then the request reports its failure and does not retain queued anonymous work
+        expect(becameIdle).toBe(true)
+        expect(settledEvents).toEqual([
+          expect.objectContaining({
+            status: 'rejected',
+            error: expect.objectContaining({ message: 'principal scope lookup failed' })
+          })
+        ])
+      } finally {
+        principalScopeFailure.enabled = false
+        await processor.shutdown()
+      }
+    })
+  })
+
   describe('WhoCanProcessor onSettlementFailure', () => {
     afterEach(() => {
       vi.restoreAllMocks()

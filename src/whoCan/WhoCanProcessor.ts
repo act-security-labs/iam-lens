@@ -724,14 +724,27 @@ export class WhoCanProcessor {
    * Dequeues the next simulation scenario using FIFO request priority.
    * Prefers the oldest active request that has ready scenarios. If the oldest
    * is temporarily empty (still preparing), falls back to the next request
-   * with ready scenarios so cores do not idle.
+   * with ready scenarios so cores do not idle. Queued scenarios for failed
+   * requests are canceled and counted as completed without being simulated.
    *
    * @returns the next work item, or undefined if no scenarios are ready.
    */
   private dequeueNextScenario(): (WhoCanWorkItem & { requestId: string }) | undefined {
-    for (const requestId of this.activeRequestOrder) {
+    for (const requestId of [...this.activeRequestOrder]) {
       const state = this.requestStates.get(requestId)
-      if (!state || state.settled) continue
+      if (!state) {
+        continue
+      }
+
+      if (state.settled) {
+        // The request failed after these scenarios were queued. Drain them
+        // without simulation so created/completed remains balanced for cleanup.
+        while (state.scenarios.dequeue()) {
+          state.completed++
+        }
+        this.checkRequestDrain(state)
+        continue
+      }
 
       const item = state.scenarios.dequeue()
       if (item) {
@@ -853,6 +866,7 @@ export class WhoCanProcessor {
           this.settleRequestAsError(state, err instanceof Error ? err : new Error(String(err)))
         } finally {
           state.pendingPreparationJobs--
+          this.notifySimulationConsumers()
           this.checkRequestCompletion(state)
         }
       }
@@ -1168,9 +1182,6 @@ export class WhoCanProcessor {
     // All follow-up prep jobs have been enqueued. Mark scenarios as fully specified
     // once the root prep and all follow-ups complete (tracked by pendingPreparationJobs).
     state.allScenariosCreated = true
-
-    // Notify consumers that scenarios may be available
-    this.notifySimulationConsumers()
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -1340,15 +1351,18 @@ export class WhoCanProcessor {
 
   /**
    * Settles a request as failed: invokes onRequestSettled with the error
-   * immediately, but keeps the request in active state until all in-flight
-   * work drains (created === completed). Late results for settled requests
-   * are discarded but still counted so the drain completes.
+   * immediately, but keeps the request in active state until queued scenarios
+   * are canceled and in-flight work drains (created === completed). Late
+   * results for settled requests are discarded but still counted so the drain
+   * completes.
    *
    * @param state - The request state to settle.
    * @param error - The error that caused the failure.
    */
   private settleRequestAsError(state: RequestState, error: Error): void {
-    if (state.settled) return
+    if (state.settled) {
+      return
+    }
     state.settled = true
 
     // Await the callback (backpressure), then mark it done so checkRequestDrain
