@@ -1,3 +1,10 @@
+## [0.1.179](https://github.com/act-security-labs/iam-lens/compare/v0.1.178...v0.1.179) (2026-10-27)
+
+
+### Bug Fixes
+
+* centralize whoCan scenario wakeups ([#234](https://github.com/act-security-labs/iam-lens/issues/234)) ([ace7ae0](https://github.com/act-security-labs/iam-lens/commit/ace7ae04f502a201d00def11816853dd8a0cdfb0))
+
 ## [0.1.178](https://github.com/act-security-labs/iam-lens/compare/v0.1.177...v0.1.178) (2026-10-27)
 
 
