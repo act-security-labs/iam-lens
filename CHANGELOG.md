@@ -1,3 +1,10 @@
+## [0.1.180](https://github.com/act-security-labs/iam-lens/compare/v0.1.179...v0.1.180) (2026-10-28)
+
+
+### Features
+
+* skip blocked anonymous requests ([#235](https://github.com/act-security-labs/iam-lens/issues/235)) ([c3c184d](https://github.com/act-security-labs/iam-lens/commit/c3c184d7aa10313f55487e4ff83a1c30ea8d0fc7))
+
 ## [0.1.179](https://github.com/act-security-labs/iam-lens/compare/v0.1.178...v0.1.179) (2026-10-27)
 
 
