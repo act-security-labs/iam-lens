@@ -164,10 +164,16 @@ it('schedules one unsigned scenario per distinct action', async () => {
   //Given a public read-only object policy and no collected principals in scope
   const configs = getTestDatasetConfigs('2')
 
-  //When multiple actions include a duplicate and an unsupported wildcard-only action
+  //When multiple actions include a duplicate, wildcard-only, and anonymous-blocked actions
   const result = await whoCan(configs, 'aws', {
     resource: 'arn:aws:s3:::no-bpa-public-bucket/report.txt',
-    actions: ['s3:GetObject', 's3:PutObject', 's3:GetObject', 's3:ListAllMyBuckets'],
+    actions: [
+      's3:GetObject',
+      's3:PutObject',
+      's3:GetObject',
+      's3:ListAllMyBuckets',
+      'ecr:BatchCheckLayerAvailability'
+    ],
     principalScope: { anonymous: true },
     workerThreads: 0,
     denyDetailsCallback: () => true
