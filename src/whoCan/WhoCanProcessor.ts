@@ -975,7 +975,8 @@ export class WhoCanProcessor {
     if (resource && accountsToCheck.checkAnonymous && anonymousInScope) {
       for (const action of new Set(actions)) {
         const [service, actionName] = action.split(':')
-        if ((await iamActionDetails(service, actionName)).isWildcardOnly) {
+        const actionDetails = await iamActionDetails(service, actionName)
+        if (actionDetails.isWildcardOnly || actionDetails.blockAnon === true) {
           continue
         }
         this.enqueueScenario(state, {
