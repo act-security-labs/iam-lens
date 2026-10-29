@@ -8,6 +8,7 @@ import { type ClientFactoryPlugin, getCollectClient } from '../collect/collect.j
 import { IamCollectClient } from '../collect/client.js'
 import { getAccountIdForResource, getResourcePolicyForResource } from '../resources.js'
 import { Arn } from '../utils/arn.js'
+import { isAwsFoundationModelArn } from '../utils/bedrock.js'
 import { type S3AbacOverride } from '../utils/s3Abac.js'
 import { getWorkerScriptPath } from '../utils/workerScript.js'
 import { SharedArrayBufferMainCache } from '../workers/SharedArrayBufferMainCache.js'
@@ -919,15 +920,20 @@ export class WhoCanProcessor {
       throw new Error('Either resourceAccount or resource must be provided in the request.')
     }
 
-    const resourceAccount =
+    const isFoundationModel = isAwsFoundationModelArn(resource)
+    const resolvedAccount =
       request.resourceAccount || (await getAccountIdForResource(collectClient, resource!))
 
-    if (!resourceAccount) {
+    if (!resolvedAccount && !isFoundationModel) {
       throw new Error(
         `Could not determine account ID for resource ${resource}. Please use a different ARN or specify resourceAccount.`
       )
     }
 
+    // The existing owner-based helpers require a string; model work items retain the
+    // optional caller input so simulate can derive the account for each principal.
+    const resourceAccount = resolvedAccount ?? ''
+    const scenarioResourceAccount = isFoundationModel ? request.resourceAccount : resourceAccount
     const actions = await actionsForWhoCan({
       actions: request.actions,
       resource: request.resource
@@ -939,7 +945,7 @@ export class WhoCanProcessor {
     const untrustingActions = await actionsThatDoNotAutomaticallyTrustTheCurrentAccount()
 
     let resourcePolicy: ValidatedPolicy<{ name: string }> | undefined = undefined
-    if (resource) {
+    if (resource && !isFoundationModel) {
       resourcePolicy = await getResourcePolicyForResource(collectClient, resource, resourceAccount)
       const resourceArn = new Arn(resource)
       if (
@@ -970,6 +976,10 @@ export class WhoCanProcessor {
       collectClient
     )
 
+    if (isFoundationModel) {
+      accountsToCheck.allAccounts = true
+    }
+
     // An empty scope excludes anonymous too; a supplied scope must explicitly opt in.
     const anonymousInScope = !request.principalScope || request.principalScope.anonymous === true
     if (resource && accountsToCheck.checkAnonymous && anonymousInScope) {
@@ -983,7 +993,7 @@ export class WhoCanProcessor {
           simulationVariant: 'anonymous',
           principal: 'anonymous',
           resource,
-          resourceAccount,
+          resourceAccount: scenarioResourceAccount,
           action,
           discoveryContextKeyConstraints: request.discoveryContextKeyConstraints,
           collectDenyDetails: !!state.denyDetailsCallback
@@ -1003,9 +1013,10 @@ export class WhoCanProcessor {
     // The resource account is always a candidate for search — for non-untrusting
     // actions same-account principals can access via identity policy alone. Include
     // it in the base accounts list so the principalScope intersection can see it.
-    const baseAccounts = uniqueAccounts.accounts.includes(resourceAccount)
-      ? uniqueAccounts.accounts
-      : [...uniqueAccounts.accounts, resourceAccount]
+    const baseAccounts =
+      isFoundationModel || uniqueAccounts.accounts.includes(resourceAccount)
+        ? uniqueAccounts.accounts
+        : [...uniqueAccounts.accounts, resourceAccount]
 
     let accountsForSearch = baseAccounts
     let principalsForSearch = accountsToCheck.specificPrincipals
@@ -1021,8 +1032,10 @@ export class WhoCanProcessor {
         resolved.principals
       )
       accountsForSearch = intersection.accounts
-      principalsForSearch = intersection.principals
-      scopeIncludesResourceAccount = resolved.accounts.has(resourceAccount)
+      principalsForSearch = isFoundationModel
+        ? intersection.principals.filter((principal) => !isServicePrincipal(principal))
+        : intersection.principals
+      scopeIncludesResourceAccount = !isFoundationModel && resolved.accounts.has(resourceAccount)
     }
 
     // Principals explicitly named in the resource policy are enqueued via the
@@ -1058,9 +1071,10 @@ export class WhoCanProcessor {
                   ? resourceAccount
                   : undefined
 
-              const actionAccountsForSearch = isUntrusting
-                ? accountsWithoutResourceAccount
-                : accountsForSearch
+              const actionAccountsForSearch =
+                isUntrusting && !isFoundationModel
+                  ? accountsWithoutResourceAccount
+                  : accountsForSearch
 
               const indexedPrincipals = await collectClient.getPrincipalsWithActionAllowed(
                 allFromAccount,
@@ -1081,7 +1095,7 @@ export class WhoCanProcessor {
                   resource,
                   action,
                   principal,
-                  resourceAccount,
+                  resourceAccount: scenarioResourceAccount,
                   discoveryContextKeyConstraints: state.request.discoveryContextKeyConstraints,
                   collectDenyDetails: !!state.denyDetailsCallback
                 })
@@ -1121,7 +1135,7 @@ export class WhoCanProcessor {
                     resource,
                     action,
                     principal,
-                    resourceAccount,
+                    resourceAccount: scenarioResourceAccount,
                     discoveryContextKeyConstraints: state.request.discoveryContextKeyConstraints,
                     collectDenyDetails: !!state.denyDetailsCallback
                   })
@@ -1157,7 +1171,7 @@ export class WhoCanProcessor {
                   resource,
                   action,
                   principal,
-                  resourceAccount,
+                  resourceAccount: scenarioResourceAccount,
                   discoveryContextKeyConstraints: state.request.discoveryContextKeyConstraints,
                   collectDenyDetails: !!state.denyDetailsCallback
                 })
@@ -1178,7 +1192,7 @@ export class WhoCanProcessor {
                     action,
                     principal,
                     resultPrincipal: resolvedPrincipal,
-                    resourceAccount,
+                    resourceAccount: scenarioResourceAccount,
                     discoveryContextKeyConstraints: state.request.discoveryContextKeyConstraints,
                     collectDenyDetails: !!state.denyDetailsCallback
                   })

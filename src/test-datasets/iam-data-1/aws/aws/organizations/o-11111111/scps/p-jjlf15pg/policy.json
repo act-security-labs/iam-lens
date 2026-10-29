@@ -14,6 +14,12 @@
           "aws:AssumedRoot": "true"
         }
       }
+    },
+    {
+      "Sid": "DenySpecificFoundationModel",
+      "Effect": "Deny",
+      "Action": "bedrock:GetFoundationModel",
+      "Resource": "arn:aws:bedrock:us-east-1::foundation-model/scp-denied.model-v1:0"
     }
   ]
 }

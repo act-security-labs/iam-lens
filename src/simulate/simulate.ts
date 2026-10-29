@@ -31,6 +31,7 @@ import {
   getRcpsForResource,
   getResourcePolicyForResource
 } from '../resources.js'
+import { isAwsFoundationModelArn } from '../utils/bedrock.js'
 import { type S3AbacOverride } from '../utils/s3Abac.js'
 import { AssumeRoleActions } from '../utils/sts.js'
 import {
@@ -409,6 +410,14 @@ async function simulateRequestInternal(
   if (variant === 'virtualResource' && !simulationRequest.resourceArn) {
     throw new Error('Virtual resource simulations require a concrete resource ARN.')
   }
+  if (
+    !simulationRequest.resourceAccount &&
+    isAwsFoundationModelArn(simulationRequest.resourceArn) &&
+    simulationRequest.principal &&
+    !isServicePrincipal(simulationRequest.principal)
+  ) {
+    simulationRequest.resourceAccount = splitArnParts(simulationRequest.principal).accountId
+  }
   if (variant === 'virtualResource' && !simulationRequest.resourceAccount) {
     const resourceAccount = splitArnParts(simulationRequest.resourceArn!).accountId
     if (!resourceAccount) {
@@ -475,7 +484,10 @@ async function simulateRequestInternal(
   const principalArnForContext = simulationRequest.principal
     ? await resolvePrincipalArnForContext(collectClient, simulationRequest.principal)
     : undefined
-  const includeResourceMetadata = variant !== 'externalResource' && variant !== 'virtualResource'
+  const includeResourceMetadata =
+    variant !== 'externalResource' &&
+    variant !== 'virtualResource' &&
+    !isAwsFoundationModelArn(simulationRequest.resourceArn)
   const { contextKeys, resourceTagsAreKnown } = await createContextKeys(
     collectClient,
     simulationRequest,
@@ -1101,9 +1113,10 @@ async function getResourcePolicies(
   actionIsWildcard: boolean,
   principalAccountRcps: SimulationOrgPolicies[]
 ): Promise<ResourcePolicyInputs> {
-  const resourcePolicy = resourceArn
-    ? await getResourcePolicyForResource(collectClient, resourceArn, resourceAccount)
-    : undefined
+  const resourcePolicy =
+    resourceArn && !isAwsFoundationModelArn(resourceArn)
+      ? await getResourcePolicyForResource(collectClient, resourceArn, resourceAccount)
+      : undefined
 
   const resourceControlPolicies = await getResourceControlPolicies(
     collectClient,
@@ -1166,6 +1179,7 @@ async function getResourceControlPolicies(
   let resourceRcps: SimulationOrgPolicies[] = []
   if (
     resourceArn &&
+    !isAwsFoundationModelArn(resourceArn) &&
     !servicePrincipalAssumesServiceLinkedRole &&
     action.localeCompare(kmsRetireGrantAction, undefined, { sensitivity: 'base' }) !== 0
   ) {

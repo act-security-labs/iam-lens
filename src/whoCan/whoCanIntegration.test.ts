@@ -132,6 +132,151 @@ interface WhoCanIntegrationTest {
 
 const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
   {
+    name: 'foundation model scoped to principals in two accounts',
+    data: '1',
+    request: {
+      resource: 'arn:aws:bedrock:us-east-1::foundation-model/example.model-v1:0',
+      actions: ['bedrock:GetFoundationModel'],
+      principalScope: {
+        principals: [
+          'arn:aws:iam::100000000001:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AdministratorAccess_0fed56ec5d997fc5',
+          'arn:aws:iam::100000000002:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AdministratorAccess_0fed56ec5d997fc5'
+        ]
+      }
+    },
+    expected: {
+      who: [
+        {
+          action: 'GetFoundationModel',
+          principal:
+            'arn:aws:iam::100000000001:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AdministratorAccess_0fed56ec5d997fc5',
+          service: 'bedrock',
+          level: 'read',
+          resourceType: 'foundation-model'
+        },
+        {
+          action: 'GetFoundationModel',
+          principal:
+            'arn:aws:iam::100000000002:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AdministratorAccess_0fed56ec5d997fc5',
+          service: 'bedrock',
+          level: 'read',
+          resourceType: 'foundation-model'
+        }
+      ]
+    }
+  },
+  {
+    name: 'foundation model scoped to two accounts',
+    data: '1',
+    request: {
+      resource: 'arn:aws:bedrock:us-east-1::foundation-model/example.model-v1:0',
+      actions: ['bedrock:GetFoundationModel'],
+      principalScope: { accounts: ['100000000001', '100000000002'] }
+    },
+    expected: {
+      who: [
+        {
+          action: 'GetFoundationModel',
+          principal:
+            'arn:aws:iam::100000000001:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AdministratorAccess_0fed56ec5d997fc5',
+          service: 'bedrock',
+          level: 'read',
+          resourceType: 'foundation-model'
+        },
+        {
+          action: 'GetFoundationModel',
+          principal:
+            'arn:aws:iam::100000000002:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AdministratorAccess_0fed56ec5d997fc5',
+          service: 'bedrock',
+          level: 'read',
+          resourceType: 'foundation-model'
+        }
+      ]
+    }
+  },
+  {
+    name: 'foundation model with explicit resource account',
+    data: '1',
+    request: {
+      resource: 'arn:aws:bedrock:us-east-1::foundation-model/example.model-v1:0',
+      resourceAccount: '100000000001',
+      actions: ['bedrock:GetFoundationModel'],
+      principalScope: {
+        principals: [
+          'arn:aws:iam::100000000001:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AdministratorAccess_0fed56ec5d997fc5',
+          'arn:aws:iam::100000000002:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AdministratorAccess_0fed56ec5d997fc5'
+        ]
+      }
+    },
+    expected: {
+      who: [
+        {
+          action: 'GetFoundationModel',
+          principal:
+            'arn:aws:iam::100000000001:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AdministratorAccess_0fed56ec5d997fc5',
+          service: 'bedrock',
+          level: 'read',
+          resourceType: 'foundation-model'
+        }
+      ]
+    }
+  },
+  {
+    name: 'foundation model with empty scope',
+    data: '1',
+    request: {
+      resource: 'arn:aws:bedrock:us-east-1::foundation-model/example.model-v1:0',
+      actions: ['bedrock:GetFoundationModel'],
+      principalScope: {}
+    },
+    expected: { who: [] },
+    simulationCounts: { withIndex: 0, withoutIndex: 0 }
+  },
+  {
+    name: 'foundation model across all accounts',
+    data: '1',
+    request: {
+      resource: 'arn:aws:bedrock:us-east-1::foundation-model/example.model-v1:0',
+      actions: ['bedrock:GetFoundationModel']
+    },
+    expected: {
+      who: [
+        {
+          action: 'GetFoundationModel',
+          principal:
+            'arn:aws:iam::100000000001:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AdministratorAccess_0fed56ec5d997fc5',
+          service: 'bedrock',
+          level: 'read',
+          resourceType: 'foundation-model'
+        },
+        {
+          action: 'GetFoundationModel',
+          principal:
+            'arn:aws:iam::100000000002:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AdministratorAccess_0fed56ec5d997fc5',
+          service: 'bedrock',
+          level: 'read',
+          resourceType: 'foundation-model'
+        },
+        {
+          action: 'GetFoundationModel',
+          principal:
+            'arn:aws:iam::200000000001:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AdministratorAccess_0fed56ec5d997fc5',
+          service: 'bedrock',
+          level: 'read',
+          resourceType: 'foundation-model'
+        },
+        {
+          action: 'GetFoundationModel',
+          principal: 'arn:aws:iam::200000000002:user/user1',
+          service: 'bedrock',
+          level: 'read',
+          resourceType: 'foundation-model'
+        }
+      ],
+      allAccountsChecked: true
+    }
+  },
+  {
     name: 'within account and no resource policy',
     simulationCounts: { withoutIndex: 3, withIndex: 1 },
     data: '1',

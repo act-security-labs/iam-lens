@@ -44,6 +44,30 @@ interface AnonymousIntegrationCase {
 
 const anonymousIntegrationCases: AnonymousIntegrationCase[] = [
   {
+    name: 'cannot infer a foundation model account for an anonymous request',
+    data: '1',
+    request: {
+      resourceArn: 'arn:aws:bedrock:us-east-1::foundation-model/example.model-v1:0',
+      resourceAccount: undefined,
+      action: 'bedrock:GetFoundationModel',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expectedError: 'Unable to find account ID'
+  },
+  {
+    name: 'does not grant anonymous access to a foundation model with an explicit account',
+    data: '1',
+    request: {
+      resourceArn: 'arn:aws:bedrock:us-east-1::foundation-model/example.model-v1:0',
+      resourceAccount: '100000000001',
+      action: 'bedrock:GetFoundationModel',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'ImplicitlyDenied'
+  },
+  {
     name: 'allows public object access when S3 Block Public Access is disabled',
     data: '2',
     request: {

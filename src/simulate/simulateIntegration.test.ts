@@ -10,7 +10,8 @@ import {
   simulateExternalPrincipalRequest,
   simulateRequest,
   simulateVirtualPrincipal,
-  SimulationRequest
+  SimulationRequest,
+  type VirtualPrincipalSimulationRequest
 } from './simulate.js'
 
 type IntegrationSimulationVariant = 'normal' | 'externalPrincipal' | 'virtualPrincipal'
@@ -22,12 +23,308 @@ const simulateIntegrationTest: {
 
   data: string
   variant?: IntegrationSimulationVariant
-  request: SimulationRequest
+  request: VirtualPrincipalSimulationRequest
 
   expected: EvaluationResult
   expectedError?: string
   expectedConditions?: RequestAnalysis['conditions']
 }[] = [
+  {
+    name: 'foundation model derives caller account and resource organization context',
+    data: '1',
+    request: {
+      resourceArn: 'arn:aws:bedrock:us-east-1::foundation-model/example.model-v1:0',
+      resourceAccount: undefined,
+      action: 'bedrock:GetFoundationModel',
+      principal:
+        'arn:aws:iam::100000000001:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AdministratorAccess_0fed56ec5d997fc5',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'Allowed'
+  },
+  {
+    name: 'foundation model caller account and organization context satisfy a collected policy',
+    data: '1',
+    request: {
+      resourceArn: 'arn:aws:bedrock:us-east-1::foundation-model/context.model-v1:0',
+      resourceAccount: undefined,
+      action: 'bedrock:GetFoundationModel',
+      principal: 'arn:aws:iam::100000000001:role/S3ObjectWildcardRole',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'Allowed'
+  },
+  {
+    name: 'foundation model custom resource account context overrides the generated value',
+    data: '1',
+    request: {
+      resourceArn: 'arn:aws:bedrock:us-east-1::foundation-model/context.model-v1:0',
+      resourceAccount: undefined,
+      action: 'bedrock:GetFoundationModel',
+      principal: 'arn:aws:iam::100000000001:role/S3ObjectWildcardRole',
+      customContextKeys: { 'aws:ResourceAccount': '999999999999' },
+      simulationMode: 'Strict'
+    },
+    expected: 'ImplicitlyDenied'
+  },
+  {
+    name: 'foundation model preserves an explicit account and context',
+    data: '1',
+    request: {
+      resourceArn: 'arn:aws:bedrock:us-east-1::foundation-model/example.model-v1:0',
+      resourceAccount: '100000000002',
+      action: 'bedrock:GetFoundationModel',
+      principal:
+        'arn:aws:iam::100000000001:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AdministratorAccess_0fed56ec5d997fc5',
+      customContextKeys: { 'aws:ResourceAccount': '999999999999' },
+      simulationMode: 'Strict'
+    },
+    expected: 'ImplicitlyDenied'
+  },
+  {
+    name: 'foundation model derives account for a virtual user',
+    data: '1',
+    variant: 'virtualPrincipal',
+    request: {
+      resourceArn: 'arn:aws:bedrock:us-east-1::foundation-model/example.model-v1:0',
+      resourceAccount: undefined,
+      action: 'bedrock:GetFoundationModel',
+      principal: 'arn:aws:iam::100000000001:user/VirtualUser',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'Allowed'
+  },
+  {
+    name: 'foundation model derives account for a virtual role session',
+    data: '1',
+    variant: 'virtualPrincipal',
+    request: {
+      resourceArn: 'arn:aws:bedrock:us-east-1::foundation-model/example.model-v1:0',
+      resourceAccount: undefined,
+      action: 'bedrock:GetFoundationModel',
+      principal: 'arn:aws:sts::100000000001:assumed-role/VirtualRole/session',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'Allowed'
+  },
+  {
+    name: 'other accountless Bedrock resources still require account resolution',
+    data: '1',
+    request: {
+      resourceArn: 'arn:aws:bedrock:us-east-1::inference-profile/example',
+      resourceAccount: undefined,
+      action: 'bedrock:GetFoundationModel',
+      principal:
+        'arn:aws:iam::100000000001:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AdministratorAccess_0fed56ec5d997fc5',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'ImplicitlyDenied',
+    expectedError: 'Unable to find account ID'
+  },
+  {
+    name: 'foundation model identity policy allows the matching action and model',
+    data: '1',
+    request: {
+      resourceArn: 'arn:aws:bedrock:us-east-1::foundation-model/identity.model-v1:0',
+      resourceAccount: undefined,
+      action: 'bedrock:GetFoundationModel',
+      principal: 'arn:aws:iam::100000000001:role/S3ObjectWildcardRole',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'Allowed'
+  },
+  {
+    name: 'foundation model identity policy does not allow a different action',
+    data: '1',
+    request: {
+      resourceArn: 'arn:aws:bedrock:us-east-1::foundation-model/identity.model-v1:0',
+      resourceAccount: undefined,
+      action: 'bedrock:InvokeModel',
+      principal: 'arn:aws:iam::100000000001:role/S3ObjectWildcardRole',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'ImplicitlyDenied'
+  },
+  {
+    name: 'foundation model identity policy does not allow a different model',
+    data: '1',
+    request: {
+      resourceArn: 'arn:aws:bedrock:us-east-1::foundation-model/other',
+      resourceAccount: undefined,
+      action: 'bedrock:GetFoundationModel',
+      principal: 'arn:aws:iam::100000000001:role/S3ObjectWildcardRole',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'ImplicitlyDenied'
+  },
+  {
+    name: 'foundation model allows invocation with a matching inference profile',
+    data: '1',
+    request: {
+      resourceArn: 'arn:aws:bedrock:us-east-1::foundation-model/identity.model-v1:0',
+      resourceAccount: undefined,
+      action: 'bedrock:InvokeModel',
+      principal: 'arn:aws:iam::100000000001:role/S3ObjectWildcardRole',
+      customContextKeys: {
+        'bedrock:InferenceProfileArn':
+          'arn:aws:bedrock:us-east-1:100000000001:inference-profile/example'
+      },
+      simulationMode: 'Strict'
+    },
+    expected: 'Allowed'
+  },
+  {
+    name: 'foundation model denies invocation with a different inference profile',
+    data: '1',
+    request: {
+      resourceArn: 'arn:aws:bedrock:us-east-1::foundation-model/identity.model-v1:0',
+      resourceAccount: undefined,
+      action: 'bedrock:InvokeModel',
+      principal: 'arn:aws:iam::100000000001:role/S3ObjectWildcardRole',
+      customContextKeys: {
+        'bedrock:InferenceProfileArn':
+          'arn:aws:bedrock:us-east-1:100000000001:inference-profile/other'
+      },
+      simulationMode: 'Strict'
+    },
+    expected: 'ImplicitlyDenied'
+  },
+  {
+    name: 'foundation model discovery preserves unknown profile condition',
+    data: '1',
+    request: {
+      resourceArn: 'arn:aws:bedrock:us-east-1::foundation-model/identity.model-v1:0',
+      resourceAccount: undefined,
+      action: 'bedrock:InvokeModel',
+      principal: 'arn:aws:iam::100000000001:role/S3ObjectWildcardRole',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedConditions: {
+      conditionType: 'condition',
+      op: 'StringEquals',
+      key: 'bedrock:InferenceProfileArn',
+      values: ['arn:aws:bedrock:us-east-1:100000000001:inference-profile/example'],
+      sources: [
+        {
+          policyType: 'identity',
+          effect: 'Allow',
+          policyIdentifier: 'arn:aws:iam::100000000001:role/S3ObjectWildcardRole#S3ObjectWildcards',
+          statementId: 'ProfileInvocation',
+          statementIndex: 5
+        }
+      ]
+    }
+  },
+  {
+    name: 'foundation model explicit identity deny',
+    data: '1',
+    request: {
+      resourceArn: 'arn:aws:bedrock:us-east-1::foundation-model/denied.model-v1:0',
+      resourceAccount: undefined,
+      action: 'bedrock:GetFoundationModel',
+      principal: 'arn:aws:iam::100000000001:role/S3ObjectWildcardDenyRole',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'ExplicitlyDenied'
+  },
+  {
+    name: 'foundation model permission boundary restriction',
+    data: '1',
+    request: {
+      resourceArn: 'arn:aws:bedrock:us-east-1::foundation-model/example.model-v1:0',
+      resourceAccount: undefined,
+      action: 'bedrock:GetFoundationModel',
+      principal: 'arn:aws:iam::100000000002:role/EC2Admin',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'ImplicitlyDenied'
+  },
+  {
+    name: 'foundation model SCP applies',
+    data: '1',
+    request: {
+      resourceArn: 'arn:aws:bedrock:us-east-1::foundation-model/scp-denied.model-v1:0',
+      resourceAccount: undefined,
+      action: 'bedrock:GetFoundationModel',
+      principal:
+        'arn:aws:iam::100000000002:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AdministratorAccess_0fed56ec5d997fc5',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'ExplicitlyDenied'
+  },
+  {
+    name: 'foundation model ignores caller RCP',
+    data: '1',
+    request: {
+      resourceArn: 'arn:aws:bedrock:us-east-1::foundation-model/example.model-v1:0',
+      resourceAccount: undefined,
+      action: 'bedrock:GetFoundationModel',
+      principal:
+        'arn:aws:iam::100000000002:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AdministratorAccess_0fed56ec5d997fc5',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'Allowed'
+  },
+  {
+    name: 'foundation model endpoint policy restriction',
+    data: '1',
+    request: {
+      resourceArn: 'arn:aws:bedrock:us-east-1::foundation-model/example.model-v1:0',
+      resourceAccount: undefined,
+      action: 'bedrock:GetFoundationModel',
+      principal:
+        'arn:aws:iam::100000000001:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AdministratorAccess_0fed56ec5d997fc5',
+      customContextKeys: { 'aws:SourceVpce': 'vpce-00000000002' },
+      simulationMode: 'Strict'
+    },
+    expected: 'ExplicitlyDenied'
+  },
+  {
+    name: 'foundation model service principal cannot infer an account',
+    data: '1',
+    request: {
+      resourceArn: 'arn:aws:bedrock:us-east-1::foundation-model/example.model-v1:0',
+      resourceAccount: undefined,
+      action: 'bedrock:GetFoundationModel',
+      principal: 'bedrock.amazonaws.com',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'ImplicitlyDenied',
+    expectedError: 'Unable to find account ID'
+  },
+  {
+    name: 'foundation model session restriction',
+    data: '1',
+    request: {
+      resourceArn: 'arn:aws:bedrock:us-east-1::foundation-model/example.model-v1:0',
+      resourceAccount: undefined,
+      action: 'bedrock:GetFoundationModel',
+      principal:
+        'arn:aws:iam::100000000001:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AdministratorAccess_0fed56ec5d997fc5',
+      customContextKeys: {},
+      simulationMode: 'Strict',
+      sessionPolicy: {
+        Version: '2012-10-17',
+        Statement: [{ Effect: 'Allow', Action: 's3:*', Resource: '*' }]
+      }
+    },
+    expected: 'ImplicitlyDenied'
+  },
   {
     name: 'same account resource request with resource policy',
     data: '1',
@@ -1476,7 +1773,7 @@ const simulateIntegrationTest: {
  */
 async function runIntegrationSimulation(
   variant: IntegrationSimulationVariant,
-  request: SimulationRequest,
+  request: VirtualPrincipalSimulationRequest,
   collectClient: IamCollectClient
 ) {
   switch (variant) {
@@ -1506,14 +1803,15 @@ describe('simulateIntegrationTest', () => {
         // Then it should match the expected error
         await expect(
           runIntegrationSimulation(test.variant ?? 'normal', request, collectClient)
-        ).rejects.toThrow(new RegExp('/' + test.expectedError + '/'))
+        ).rejects.toThrow(test.expectedError)
       } else {
         // When we run the simulation
-        const { result } = await runIntegrationSimulation(
+        const response = await runIntegrationSimulation(
           test.variant ?? 'normal',
           request,
           collectClient
         )
+        const { result } = response
 
         // Then the result should not have errors
         assertSuccessfulResult(result)
