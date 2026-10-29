@@ -1,3 +1,10 @@
+## [0.1.181](https://github.com/act-security-labs/iam-lens/compare/v0.1.180...v0.1.181) (2026-10-29)
+
+
+### Features
+
+* support AWS-owned Bedrock foundation models ([#236](https://github.com/act-security-labs/iam-lens/issues/236)) ([54120dc](https://github.com/act-security-labs/iam-lens/commit/54120dc399e7d60f38f95182a989fef0f2749674))
+
 ## [0.1.180](https://github.com/act-security-labs/iam-lens/compare/v0.1.179...v0.1.180) (2026-10-28)
 
 
