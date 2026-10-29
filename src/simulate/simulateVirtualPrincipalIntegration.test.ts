@@ -23,6 +23,9 @@ interface VirtualPrincipalIntegrationCase {
   /** Expected final authorization decision. */
   expected: EvaluationResult
 
+  /** Resource account used by the simulator when relevant to the scenario. */
+  expectedResourceAccount?: string
+
   /** Exact unresolved Discovery conditions expected in the result. */
   expectedConditions?: AllowedConditionExpression
 
@@ -31,6 +34,52 @@ interface VirtualPrincipalIntegrationCase {
 }
 
 const virtualPrincipalIntegrationCases: VirtualPrincipalIntegrationCase[] = [
+  {
+    expectedResourceAccount: '100000000002',
+    name: 'derives a virtual principal account for a foundation model',
+    data: '1',
+    request: {
+      principal: 'arn:aws:iam::100000000002:role/VirtualAdministrator',
+      resourceArn: 'arn:aws:bedrock:us-east-1::foundation-model/example.model-v1:0',
+      resourceAccount: undefined,
+      action: 'bedrock:GetFoundationModel',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'Allowed',
+    expectedAnalysis: 'scp-allow'
+  },
+  {
+    name: 'honors a virtual principal inline policy for a foundation model',
+    data: '1',
+    request: {
+      principal: 'arn:aws:iam::100000000002:role/VirtualAdministrator',
+      resourceArn: 'arn:aws:bedrock:us-east-1::foundation-model/example.model-v1:0',
+      resourceAccount: undefined,
+      action: 'bedrock:GetFoundationModel',
+      customContextKeys: {},
+      simulationMode: 'Strict',
+      inlinePolicy: {
+        Version: '2012-10-17',
+        Statement: [{ Effect: 'Allow', Action: 's3:*', Resource: '*' }]
+      }
+    },
+    expected: 'ImplicitlyDenied'
+  },
+  {
+    expectedResourceAccount: '100000000001',
+    name: 'honors an explicit different resource account for a virtual principal',
+    data: '1',
+    request: {
+      principal: 'arn:aws:iam::100000000002:role/VirtualAdministrator',
+      resourceArn: 'arn:aws:bedrock:us-east-1::foundation-model/example.model-v1:0',
+      resourceAccount: '100000000001',
+      action: 'bedrock:GetFoundationModel',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'ImplicitlyDenied'
+  },
   {
     name: 'applies an inherited SCP deny to an uncollected principal in a collected account',
     data: '1',
@@ -256,6 +305,9 @@ describe('simulateVirtualPrincipal integration', () => {
       //Then the expected decision and applicable organization controls are returned
       assertSuccessfulResult(response)
       expect(response.request.principal).toBe(testCase.request.principal)
+      if (testCase.expectedResourceAccount !== undefined) {
+        expect(response.request.resource.accountId).toBe(testCase.expectedResourceAccount)
+      }
       expect(response.result.overallResult).toBe(testCase.expected)
       if (Object.hasOwn(testCase, 'expectedConditions')) {
         if (response.result.resultType !== 'single') {

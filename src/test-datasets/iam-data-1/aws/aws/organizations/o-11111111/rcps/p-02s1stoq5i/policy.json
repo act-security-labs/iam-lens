@@ -20,6 +20,13 @@
       }
     },
     {
+      "Sid": "BedrockModelDeny",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "bedrock:GetFoundationModel",
+      "Resource": "arn:aws:bedrock:us-east-1::foundation-model/example.model-v1:0"
+    },
+    {
       "Sid": "S3BucketAccess",
       "Effect": "Deny",
       "Principal": "*",

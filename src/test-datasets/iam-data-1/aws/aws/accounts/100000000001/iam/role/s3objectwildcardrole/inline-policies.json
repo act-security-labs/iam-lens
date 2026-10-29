@@ -21,6 +21,36 @@
           "Effect": "Allow",
           "Action": ["s3:DeleteObject"],
           "Resource": "arn:aws:s3:::??-example-data-lake/db_tables/v5/*/_delta_log/*"
+        },
+        {
+          "Sid": "FoundationModelRead",
+          "Effect": "Allow",
+          "Action": "bedrock:GetFoundationModel",
+          "Resource": "arn:aws:bedrock:us-east-1::foundation-model/identity.model-v1:0"
+        },
+        {
+          "Sid": "ProfileInvocation",
+          "Effect": "Allow",
+          "Action": "bedrock:InvokeModel",
+          "Resource": "arn:aws:bedrock:us-east-1::foundation-model/identity.model-v1:0",
+          "Condition": {
+            "StringEquals": {
+              "bedrock:InferenceProfileArn": "arn:aws:bedrock:us-east-1:100000000001:inference-profile/example"
+            }
+          }
+        },
+        {
+          "Sid": "RequireResourceAccountContext",
+          "Effect": "Allow",
+          "Action": "bedrock:GetFoundationModel",
+          "Resource": "arn:aws:bedrock:us-east-1::foundation-model/context.model-v1:0",
+          "Condition": {
+            "StringEquals": {
+              "aws:ResourceAccount": "100000000001",
+              "aws:ResourceOrgID": "o-11111111"
+            },
+            "ForAnyValue:StringLike": { "aws:ResourceOrgPaths": "o-11111111/r-dh2e/*" }
+          }
         }
       ]
     }

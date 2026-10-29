@@ -31,6 +31,9 @@ interface ExternalPrincipalIntegrationCase {
    */
   expected?: EvaluationResult
 
+  /** Resource account used by the simulator when it is relevant to the scenario. */
+  expectedResourceAccount?: string
+
   /**
    * Expected error pattern for an unsupported request.
    */
@@ -49,6 +52,52 @@ interface ExternalPrincipalIntegrationCase {
 }
 
 const externalPrincipalIntegrationCases: ExternalPrincipalIntegrationCase[] = [
+  {
+    expectedResourceAccount: '999999999999',
+    name: 'derives an external principal account for a foundation model',
+    data: '1',
+    request: {
+      principal: 'arn:aws:iam::999999999999:role/ExternalAdministrator',
+      resourceArn: 'arn:aws:bedrock:us-east-1::foundation-model/example.model-v1:0',
+      resourceAccount: undefined,
+      action: 'bedrock:GetFoundationModel',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'Allowed',
+    expectedAnalysis: 'no-scp'
+  },
+  {
+    expectedResourceAccount: '100000000001',
+    name: 'honors an explicit different account for an external principal and foundation model',
+    data: '1',
+    request: {
+      principal: 'arn:aws:iam::999999999999:role/ExternalAdministrator',
+      resourceArn: 'arn:aws:bedrock:us-east-1::foundation-model/example.model-v1:0',
+      resourceAccount: '100000000001',
+      action: 'bedrock:GetFoundationModel',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'ImplicitlyDenied'
+  },
+  {
+    name: 'applies an external principal session policy to a foundation model',
+    data: '1',
+    request: {
+      principal: 'arn:aws:iam::999999999999:role/ExternalAdministrator',
+      resourceArn: 'arn:aws:bedrock:us-east-1::foundation-model/example.model-v1:0',
+      resourceAccount: undefined,
+      action: 'bedrock:GetFoundationModel',
+      customContextKeys: {},
+      simulationMode: 'Strict',
+      sessionPolicy: {
+        Version: '2012-10-17',
+        Statement: [{ Effect: 'Allow', Action: 's3:*', Resource: '*' }]
+      }
+    },
+    expected: 'ImplicitlyDenied'
+  },
   {
     name: 'allows an uncollected principal through a public resource policy',
     data: '2',
@@ -396,6 +445,9 @@ describe('simulateExternalPrincipalRequest integration', () => {
       //Then the expected decision and relevant policy analysis should be returned
       assertSuccessfulResult(response)
       expect(response.request.principal).toBe(testCase.request.principal)
+      if (testCase.expectedResourceAccount !== undefined) {
+        expect(response.request.resource.accountId).toBe(testCase.expectedResourceAccount)
+      }
       expect(response.result.overallResult).toBe(testCase.expected)
       assertExpectedConditions(response, testCase.expectedConditions)
       assertExpectedAnalysis(response, testCase.expectedAnalysis)
