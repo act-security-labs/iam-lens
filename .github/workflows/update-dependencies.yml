@@ -2,7 +2,7 @@ name: Update Dependencies
 
 on:
   schedule:
-    - cron: '0 12 * * 6' # Every Saturday at 12:00 PM UTC
+    - cron: '0 9 * * 6' # Every Saturday at 9:00 AM UTC
   workflow_dispatch:
 
 jobs:
