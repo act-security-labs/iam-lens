@@ -15,6 +15,7 @@ import {
   isIamRoleArn,
   isIamUserArn,
   isRootArn,
+  isAwsFoundationModelArn,
   isS3BucketOrObjectArn,
   splitArnParts
 } from '@actsecurity/iam-utils'
@@ -31,7 +32,6 @@ import {
   getRcpsForResource,
   getResourcePolicyForResource
 } from '../resources.js'
-import { isAwsFoundationModelArn } from '../utils/bedrock.js'
 import { type S3AbacOverride } from '../utils/s3Abac.js'
 import { AssumeRoleActions } from '../utils/sts.js'
 import {

@@ -132,6 +132,31 @@ interface WhoCanIntegrationTest {
 
 const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
   {
+    name: 'regionless foundation model scoped to a principal',
+    data: '1',
+    request: {
+      resource: 'arn:aws:bedrock:::foundation-model/example.model-v1:0',
+      actions: ['bedrock:GetFoundationModel'],
+      principalScope: {
+        principals: [
+          'arn:aws:iam::100000000001:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AdministratorAccess_0fed56ec5d997fc5'
+        ]
+      }
+    },
+    expected: {
+      who: [
+        {
+          action: 'GetFoundationModel',
+          principal:
+            'arn:aws:iam::100000000001:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AdministratorAccess_0fed56ec5d997fc5',
+          service: 'bedrock',
+          level: 'read',
+          resourceType: 'foundation-model'
+        }
+      ]
+    }
+  },
+  {
     name: 'foundation model scoped to principals in two accounts',
     data: '1',
     request: {

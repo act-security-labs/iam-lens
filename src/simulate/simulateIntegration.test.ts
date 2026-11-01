@@ -30,6 +30,20 @@ const simulateIntegrationTest: {
   expectedConditions?: RequestAnalysis['conditions']
 }[] = [
   {
+    name: 'regionless foundation model supports identity authorization',
+    data: '1',
+    request: {
+      resourceArn: 'arn:aws:bedrock:::foundation-model/example.model-v1:0',
+      resourceAccount: undefined,
+      action: 'bedrock:GetFoundationModel',
+      principal:
+        'arn:aws:iam::100000000001:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AdministratorAccess_0fed56ec5d997fc5',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'Allowed'
+  },
+  {
     name: 'foundation model derives caller account and resource organization context',
     data: '1',
     request: {
