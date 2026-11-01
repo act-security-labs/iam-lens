@@ -1,3 +1,10 @@
+## [0.1.184](https://github.com/act-security-labs/iam-lens/compare/v0.1.183...v0.1.184) (2026-11-01)
+
+
+### Bug Fixes
+
+* use shared foundation model ARN helper ([#239](https://github.com/act-security-labs/iam-lens/issues/239)) ([6d5b964](https://github.com/act-security-labs/iam-lens/commit/6d5b964d7054f94240c889fd1c9c0fe9f96c87e2))
+
 ## [0.1.183](https://github.com/act-security-labs/iam-lens/compare/v0.1.182...v0.1.183) (2026-10-31)
 
 ## [0.1.182](https://github.com/act-security-labs/iam-lens/compare/v0.1.181...v0.1.182) (2026-10-31)
