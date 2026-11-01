@@ -8,7 +8,6 @@ import { type ClientFactoryPlugin, getCollectClient } from '../collect/collect.j
 import { IamCollectClient } from '../collect/client.js'
 import { getAccountIdForResource, getResourcePolicyForResource } from '../resources.js'
 import { Arn } from '../utils/arn.js'
-import { isAwsFoundationModelArn } from '../utils/bedrock.js'
 import { type S3AbacOverride } from '../utils/s3Abac.js'
 import { getWorkerScriptPath } from '../utils/workerScript.js'
 import { SharedArrayBufferMainCache } from '../workers/SharedArrayBufferMainCache.js'
@@ -29,6 +28,7 @@ import {
 } from './whoCan.js'
 import {
   isAssumedRoleArn,
+  isAwsFoundationModelArn,
   isIamRoleArn,
   isIamUserArn,
   isServicePrincipal
