@@ -132,6 +132,89 @@ interface WhoCanIntegrationTest {
 
 const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
   {
+    name: 'foundation model wildcard scoped to principals in two accounts',
+    data: '1',
+    request: {
+      resource: 'arn:aws:bedrock:::foundation-model/*',
+      actions: ['bedrock:GetFoundationModel'],
+      principalScope: {
+        principals: [
+          'arn:aws:iam::100000000001:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AdministratorAccess_0fed56ec5d997fc5',
+          'arn:aws:iam::100000000002:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AdministratorAccess_0fed56ec5d997fc5'
+        ]
+      }
+    },
+    expected: {
+      who: [
+        {
+          principal:
+            'arn:aws:iam::100000000001:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AdministratorAccess_0fed56ec5d997fc5',
+          service: 'bedrock',
+          action: 'GetFoundationModel',
+          level: 'read',
+          allowedPatterns: [{ pattern: '*', resourceType: 'foundation-model' }]
+        },
+        {
+          principal:
+            'arn:aws:iam::100000000002:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AdministratorAccess_0fed56ec5d997fc5',
+          service: 'bedrock',
+          action: 'GetFoundationModel',
+          level: 'read',
+          allowedPatterns: [{ pattern: '*', resourceType: 'foundation-model' }]
+        }
+      ]
+    }
+  },
+  {
+    name: 'foundation model wildcard with explicit resource account searches all accounts',
+    data: '1',
+    request: {
+      resource: 'arn:aws:bedrock:::foundation-model/*',
+      resourceAccount: '100000000001',
+      actions: ['bedrock:GetFoundationModel']
+    },
+    expected: {
+      allAccountsChecked: true,
+      who: [
+        {
+          principal:
+            'arn:aws:iam::100000000001:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AdministratorAccess_0fed56ec5d997fc5',
+          service: 'bedrock',
+          action: 'GetFoundationModel',
+          level: 'read',
+          allowedPatterns: [{ pattern: '*', resourceType: 'foundation-model' }]
+        }
+      ]
+    }
+  },
+  {
+    name: 'foundation model wildcard preserves explicit resource account within scope',
+    data: '1',
+    request: {
+      resource: 'arn:aws:bedrock:::foundation-model/*',
+      resourceAccount: '100000000001',
+      actions: ['bedrock:GetFoundationModel'],
+      principalScope: {
+        principals: [
+          'arn:aws:iam::100000000001:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AdministratorAccess_0fed56ec5d997fc5',
+          'arn:aws:iam::100000000002:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AdministratorAccess_0fed56ec5d997fc5'
+        ]
+      }
+    },
+    expected: {
+      who: [
+        {
+          principal:
+            'arn:aws:iam::100000000001:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AdministratorAccess_0fed56ec5d997fc5',
+          service: 'bedrock',
+          action: 'GetFoundationModel',
+          level: 'read',
+          allowedPatterns: [{ pattern: '*', resourceType: 'foundation-model' }]
+        }
+      ]
+    }
+  },
+  {
     name: 'regionless foundation model scoped to a principal',
     data: '1',
     request: {

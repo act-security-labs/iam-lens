@@ -13,10 +13,10 @@ import {
 import {
   convertAssumedRoleArnToRoleArn,
   isAssumedRoleArn,
+  isAwsFoundationModelArn,
   isIamRoleArn,
   isIamUserArn,
   isRootArn,
-  isAwsFoundationModelArn,
   isS3BucketOrObjectArn,
   splitArnParts
 } from '@actsecurity/iam-utils'
@@ -361,6 +361,9 @@ async function simulateRequestInternal(
   collectClient: IamCollectClient
 ): Promise<SimulateRequestResult> {
   const simulationRequest = { ...input }
+  const isFoundationModel = isAwsFoundationModelArn(simulationRequest.resourceArn, {
+    allowResourceWildcards: true
+  })
   if (variant === 'anonymous') {
     const invalidContextKey = Object.keys(simulationRequest.customContextKeys).find(
       isAnonymousPrincipalContextKey
@@ -413,7 +416,7 @@ async function simulateRequestInternal(
   }
   if (
     !simulationRequest.resourceAccount &&
-    isAwsFoundationModelArn(simulationRequest.resourceArn) &&
+    isFoundationModel &&
     simulationRequest.principal &&
     !isServicePrincipal(simulationRequest.principal)
   ) {
@@ -486,9 +489,7 @@ async function simulateRequestInternal(
     ? await resolvePrincipalArnForContext(collectClient, simulationRequest.principal)
     : undefined
   const includeResourceMetadata =
-    variant !== 'externalResource' &&
-    variant !== 'virtualResource' &&
-    !isAwsFoundationModelArn(simulationRequest.resourceArn)
+    variant !== 'externalResource' && variant !== 'virtualResource' && !isFoundationModel
   const { contextKeys, resourceTagsAreKnown } = await createContextKeys(
     collectClient,
     simulationRequest,
@@ -1102,7 +1103,7 @@ async function getResourcePolicies(
   principalAccountRcps: SimulationOrgPolicies[]
 ): Promise<ResourcePolicyInputs> {
   const resourcePolicy =
-    resourceArn && !isAwsFoundationModelArn(resourceArn)
+    resourceArn && !isAwsFoundationModelArn(resourceArn, { allowResourceWildcards: true })
       ? await getResourcePolicyForResource(collectClient, resourceArn, resourceAccount)
       : undefined
 
@@ -1167,7 +1168,7 @@ async function getResourceControlPolicies(
   let resourceRcps: SimulationOrgPolicies[] = []
   if (
     resourceArn &&
-    !isAwsFoundationModelArn(resourceArn) &&
+    !isAwsFoundationModelArn(resourceArn, { allowResourceWildcards: true }) &&
     !servicePrincipalAssumesServiceLinkedRole &&
     !equalsIgnoreCase(action, kmsRetireGrantAction)
   ) {

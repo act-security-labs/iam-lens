@@ -30,6 +30,76 @@ const simulateIntegrationTest: {
   expectedConditions?: RequestAnalysis['conditions']
 }[] = [
   {
+    name: 'regionless foundation model wildcard supports identity authorization',
+    data: '1',
+    request: {
+      resourceArn: 'arn:aws:bedrock:::foundation-model/*',
+      resourceAccount: undefined,
+      action: 'bedrock:GetFoundationModel',
+      principal:
+        'arn:aws:iam::100000000001:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AdministratorAccess_0fed56ec5d997fc5',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'Allowed'
+  },
+  {
+    name: 'regional foundation model wildcard supports identity authorization',
+    data: '1',
+    request: {
+      resourceArn: 'arn:aws:bedrock:us-east-1::foundation-model/*',
+      resourceAccount: undefined,
+      action: 'bedrock:GetFoundationModel',
+      principal:
+        'arn:aws:iam::100000000001:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AdministratorAccess_0fed56ec5d997fc5',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'Allowed'
+  },
+  {
+    name: 'foundation model wildcard uses caller account and organization context',
+    data: '1',
+    request: {
+      resourceArn: 'arn:aws:bedrock:us-east-1::foundation-model/context.model-v1:*',
+      resourceAccount: undefined,
+      action: 'bedrock:GetFoundationModel',
+      principal: 'arn:aws:iam::100000000001:role/S3ObjectWildcardRole',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'Allowed'
+  },
+  {
+    name: 'other accountless Bedrock resource wildcard still requires account resolution',
+    data: '1',
+    request: {
+      resourceArn: 'arn:aws:bedrock:us-east-1::inference-profile/*',
+      resourceAccount: undefined,
+      action: 'bedrock:GetFoundationModel',
+      principal:
+        'arn:aws:iam::100000000001:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AdministratorAccess_0fed56ec5d997fc5',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'ImplicitlyDenied',
+    expectedError: 'Unable to find account ID'
+  },
+  {
+    name: 'foundation model wildcard cannot infer an account from a service principal',
+    data: '1',
+    request: {
+      resourceArn: 'arn:aws:bedrock:::foundation-model/*',
+      resourceAccount: undefined,
+      action: 'bedrock:GetFoundationModel',
+      principal: 'bedrock.amazonaws.com',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'ImplicitlyDenied',
+    expectedError: 'Unable to find account ID'
+  },
+  {
     name: 'regionless foundation model supports identity authorization',
     data: '1',
     request: {

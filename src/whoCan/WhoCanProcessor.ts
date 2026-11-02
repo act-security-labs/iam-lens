@@ -920,7 +920,7 @@ export class WhoCanProcessor {
       throw new Error('Either resourceAccount or resource must be provided in the request.')
     }
 
-    const isFoundationModel = isAwsFoundationModelArn(resource)
+    const isFoundationModel = isAwsFoundationModelArn(resource, { allowResourceWildcards: true })
     const resolvedAccount =
       request.resourceAccount || (await getAccountIdForResource(collectClient, resource!))
 
