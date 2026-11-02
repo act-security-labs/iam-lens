@@ -42,6 +42,9 @@ export {
   type ResourceAccessRequest,
   type WhoCanAllowed,
   type WhoCanAllowedResourcePattern,
+  type WhoCanDenyDetail,
+  type SingleWhoCanDenyDetail,
+  type WildcardWhoCanDenyDetail,
   type WhoCanResponse
 } from './whoCan/whoCan.js'
 export { iamPatternToRegex } from './whoCan/principalArnFilter.js'

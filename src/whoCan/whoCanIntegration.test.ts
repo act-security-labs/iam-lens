@@ -9,6 +9,7 @@ import {
   type WhoCanResponse
 } from './whoCan.js'
 import { WhoCanProcessor } from './WhoCanProcessor.js'
+import type { LightRequestAnalysis } from './requestAnalysis.js'
 
 /**
  * Build the expected iam-simulate source metadata for a resource-policy allow statement.
@@ -124,6 +125,7 @@ interface WhoCanIntegrationTest {
     principalsNotFound?: string[]
   }
   expectedDenyDetails?: WhoCanDenyDetail[]
+  expectedCallbackAnalyses?: unknown[]
   simulationCounts?: {
     withIndex: number
     withoutIndex: number
@@ -155,6 +157,188 @@ const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
         }
       ]
     }
+  },
+  {
+    name: 'mixed wildcard returns all denied patterns when callback accepts',
+    data: '1',
+    request: {
+      resource: 'arn:aws:s3:::wildcard-bucket/reports/*',
+      actions: ['s3:GetObject'],
+      principalScope: { principals: ['arn:aws:iam::100000000001:role/S3ObjectWildcardRole'] },
+      denyDetailsCallback: (analysis) => {
+        expect(analysis).toMatchObject({ type: 'wildcard', mixedResult: true })
+        return true
+      }
+    },
+    expected: {
+      who: [
+        {
+          principal: 'arn:aws:iam::100000000001:role/S3ObjectWildcardRole',
+          service: 's3',
+          action: 'GetObject',
+          level: 'read',
+          allowedPatterns: [
+            { pattern: 'arn:aws:s3:::wildcard-bucket/reports/*', resourceType: 'object' },
+            { pattern: 'arn:aws:s3:::wildcard-bucket/reports/2024/*', resourceType: 'object' }
+          ]
+        }
+      ]
+    },
+    expectedCallbackAnalyses: [
+      expect.objectContaining({
+        type: 'wildcard',
+        overallResult: 'Allowed',
+        requestedResourcePattern: 'arn:aws:s3:::wildcard-bucket/reports/*',
+        patterns: expect.arrayContaining([
+          expect.objectContaining({
+            pattern: 'arn:aws:s3:::wildcard-bucket/reports/*',
+            result: 'Allowed'
+          }),
+          expect.objectContaining({
+            pattern: 'arn:aws:s3:::wildcard-bucket/reports/private/*',
+            result: 'ExplicitlyDenied'
+          }),
+          expect.objectContaining({
+            pattern: 'arn:aws:s3:::wildcard-bucket/reports/restricted/*',
+            result: 'ExplicitlyDenied'
+          })
+        ])
+      })
+    ],
+    expectedDenyDetails: [
+      {
+        type: 'wildcard',
+        principal: 'arn:aws:iam::100000000001:role/S3ObjectWildcardRole',
+        service: 's3',
+        action: 'GetObject',
+        deniedResources: [
+          {
+            pattern: 'arn:aws:s3:::wildcard-bucket/reports/private/*',
+            resourceType: 'object',
+            details: [
+              {
+                policyType: 'identity',
+                denialType: 'Explicit',
+                statementIndex: 2,
+                policyIdentifier:
+                  'arn:aws:iam::100000000001:role/S3ObjectWildcardRole#S3ObjectWildcards'
+              }
+            ]
+          },
+          {
+            pattern: 'arn:aws:s3:::wildcard-bucket/reports/restricted/*',
+            resourceType: 'object',
+            details: [
+              {
+                policyType: 'identity',
+                denialType: 'Explicit',
+                statementIndex: 2,
+                policyIdentifier:
+                  'arn:aws:iam::100000000001:role/S3ObjectWildcardRole#S3ObjectWildcards'
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    name: 'mixed wildcard omits denial details when callback rejects',
+    data: '1',
+    request: {
+      resource: 'arn:aws:s3:::wildcard-bucket/reports/*',
+      actions: ['s3:GetObject'],
+      principalScope: { principals: ['arn:aws:iam::100000000001:role/S3ObjectWildcardRole'] },
+      denyDetailsCallback: (analysis) => {
+        expect(analysis).toMatchObject({ type: 'wildcard', mixedResult: true })
+        return false
+      }
+    },
+    expected: {
+      who: [
+        {
+          principal: 'arn:aws:iam::100000000001:role/S3ObjectWildcardRole',
+          service: 's3',
+          action: 'GetObject',
+          level: 'read',
+          allowedPatterns: [
+            { pattern: 'arn:aws:s3:::wildcard-bucket/reports/*', resourceType: 'object' },
+            { pattern: 'arn:aws:s3:::wildcard-bucket/reports/2024/*', resourceType: 'object' }
+          ]
+        }
+      ]
+    },
+    expectedCallbackAnalyses: [
+      expect.objectContaining({
+        type: 'wildcard',
+        overallResult: 'Allowed',
+        requestedResourcePattern: 'arn:aws:s3:::wildcard-bucket/reports/*',
+        patterns: expect.arrayContaining([
+          expect.objectContaining({
+            pattern: 'arn:aws:s3:::wildcard-bucket/reports/*',
+            result: 'Allowed'
+          }),
+          expect.objectContaining({
+            pattern: 'arn:aws:s3:::wildcard-bucket/reports/private/*',
+            result: 'ExplicitlyDenied'
+          }),
+          expect.objectContaining({
+            pattern: 'arn:aws:s3:::wildcard-bucket/reports/restricted/*',
+            result: 'ExplicitlyDenied'
+          })
+        ])
+      })
+    ],
+    expectedDenyDetails: []
+  },
+  {
+    name: 'mixed wildcard preserves allowed patterns without a callback',
+    data: '1',
+    request: {
+      resource: 'arn:aws:s3:::wildcard-bucket/reports/*',
+      actions: ['s3:GetObject'],
+      principalScope: { principals: ['arn:aws:iam::100000000001:role/S3ObjectWildcardRole'] }
+    },
+    expected: {
+      who: [
+        {
+          principal: 'arn:aws:iam::100000000001:role/S3ObjectWildcardRole',
+          service: 's3',
+          action: 'GetObject',
+          level: 'read',
+          allowedPatterns: [
+            { pattern: 'arn:aws:s3:::wildcard-bucket/reports/*', resourceType: 'object' },
+            { pattern: 'arn:aws:s3:::wildcard-bucket/reports/2024/*', resourceType: 'object' }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    name: 'fully allowed wildcard does not invoke denial callback',
+    data: '1',
+    request: {
+      resource: 'arn:aws:s3:::wildcard-bucket/reports/2024/*',
+      actions: ['s3:GetObject'],
+      principalScope: { principals: ['arn:aws:iam::100000000001:role/S3ObjectWildcardRole'] },
+      denyDetailsCallback: () => true
+    },
+    expected: {
+      who: [
+        {
+          principal: 'arn:aws:iam::100000000001:role/S3ObjectWildcardRole',
+          service: 's3',
+          action: 'GetObject',
+          level: 'read',
+          allowedPatterns: [
+            { pattern: 'arn:aws:s3:::wildcard-bucket/reports/*', resourceType: 'object' },
+            { pattern: 'arn:aws:s3:::wildcard-bucket/reports/2024/*', resourceType: 'object' }
+          ]
+        }
+      ]
+    },
+    expectedCallbackAnalyses: [],
+    expectedDenyDetails: []
   },
   {
     name: 'foundation model scoped to principals in two accounts',
@@ -842,7 +1026,12 @@ const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
     request: {
       resource: 'arn:aws:s3:::wildcard-bucket/reports/private/*',
       actions: ['s3:GetObject'],
-      denyDetailsCallback: (details) => details.overallResult === 'ExplicitlyDenied'
+      denyDetailsCallback: (details) => {
+        if (details.type === 'wildcard') {
+          expect(details.mixedResult).toBeUndefined()
+        }
+        return details.overallResult === 'ExplicitlyDenied'
+      }
     },
     expected: {
       who: [
@@ -3967,6 +4156,7 @@ async function runParallelProcessorTest(
 
   const resultsMap = new Map<string, WhoCanResponse | string>()
   const requestIdMap = new Map<string, { testIndex: number; testName: string }>()
+  const callbackAnalyses = new Map<number, LightRequestAnalysis[]>()
 
   //And a processor with the specified tuning
   const processor = await WhoCanProcessor.create({
@@ -3992,6 +4182,8 @@ async function runParallelProcessorTest(
         continue
       }
 
+      const analyses: LightRequestAnalysis[] = []
+      callbackAnalyses.set(i, analyses)
       const requestId = processor.enqueueWhoCan({
         actions: request.actions,
         resource: request.resource,
@@ -3999,6 +4191,11 @@ async function runParallelProcessorTest(
         principalScope: request.principalScope,
         discoveryContextKeyConstraints: request.discoveryContextKeyConstraints,
         denyDetailsCallback: request.denyDetailsCallback
+          ? (analysis) => {
+              analyses.push(analysis)
+              return request.denyDetailsCallback!(analysis)
+            }
+          : undefined
       })
       requestIdMap.set(requestId, { testIndex: i, testName: name })
     }
@@ -4028,6 +4225,9 @@ async function runParallelProcessorTest(
         if (test.request.s3AbacOverride) {
           // Skip verifying results for tests with s3AbacOverride in the parallel test since it is a processor level setting and won't match
           continue
+        }
+        if (test.expectedCallbackAnalyses) {
+          expect(callbackAnalyses.get(testIndex)).toEqual(test.expectedCallbackAnalyses)
         }
         const message = `Results do not match for test "${testName}" (index ${testIndex})`
         assertWhoCanResponse(
@@ -4111,9 +4311,22 @@ describe('whoCan Integration Tests', () => {
         const configs = getTestDatasetConfigs(data)
 
         //When we call whoCan
-        const requestCopy = { ...request }
+        const analyses: LightRequestAnalysis[] = []
+        const callback = request.denyDetailsCallback
+        const requestCopy = {
+          ...request,
+          denyDetailsCallback: callback
+            ? (analysis: LightRequestAnalysis) => {
+                analyses.push(analysis)
+                return callback(analysis)
+              }
+            : undefined
+        }
         requestCopy.ignorePrincipalIndex = !withIndex
         const result = await whoCan(configs, 'aws', requestCopy)
+        if (test.expectedCallbackAnalyses) {
+          expect(analyses).toEqual(test.expectedCallbackAnalyses)
+        }
 
         //Then we expect the result to match the expected output
         if (test.simulationCounts !== undefined && !withIndex) {

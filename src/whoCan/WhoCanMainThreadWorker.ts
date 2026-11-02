@@ -121,7 +121,19 @@ export function createMainThreadStreamingWorkQueue(
 
       if (result.status === 'fulfilled') {
         const executionResult = result.value
-        if (executionResult.type === 'allowed') {
+        if (
+          executionResult.type === 'allowed' ||
+          executionResult.type === 'allowed_mixed_wildcard'
+        ) {
+          if (executionResult.type === 'allowed_mixed_wildcard') {
+            const shouldInclude = onCheckDenyDetails(
+              requestId,
+              toLightRequestAnalysis(executionResult)
+            )
+            if (shouldInclude) {
+              onDenyDetail(requestId, convertToDenialDetails(executionResult))
+            }
+          }
           onSimulationResult(requestId, {
             status: 'fulfilled',
             value: executionResult.allowed,

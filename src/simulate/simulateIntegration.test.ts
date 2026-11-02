@@ -28,6 +28,7 @@ const simulateIntegrationTest: {
   expected: EvaluationResult
   expectedError?: string
   expectedConditions?: RequestAnalysis['conditions']
+  expectedPatterns?: { pattern: string; result: EvaluationResult }[]
 }[] = [
   {
     name: 'regionless foundation model supports identity authorization',
@@ -42,6 +43,24 @@ const simulateIntegrationTest: {
       simulationMode: 'Strict'
     },
     expected: 'Allowed'
+  },
+  {
+    name: 'wildcard simulation returns allowed and denied resource patterns',
+    data: '1',
+    request: {
+      principal: 'arn:aws:iam::100000000001:role/S3ObjectWildcardRole',
+      action: 's3:GetObject',
+      resourceArn: 'arn:aws:s3:::wildcard-bucket/reports/*',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'Allowed',
+    expectedPatterns: [
+      { pattern: 'arn:aws:s3:::wildcard-bucket/reports/*', result: 'Allowed' },
+      { pattern: 'arn:aws:s3:::wildcard-bucket/reports/2024/*', result: 'Allowed' },
+      { pattern: 'arn:aws:s3:::wildcard-bucket/reports/private/*', result: 'ExplicitlyDenied' },
+      { pattern: 'arn:aws:s3:::wildcard-bucket/reports/restricted/*', result: 'ExplicitlyDenied' }
+    ]
   },
   {
     name: 'foundation model derives caller account and resource organization context',
@@ -1835,6 +1854,19 @@ describe('simulateIntegrationTest', () => {
           console.log(JSON.stringify(getRcpAnalysisForLogging(result), null, 2))
         }
         expect(result.overallResult).toEqual(test.expected)
+
+        if (test.expectedPatterns) {
+          if (result.resultType !== 'wildcard') {
+            throw new Error(`Expected a wildcard simulation result, received ${result.resultType}`)
+          }
+          expect(result.results).toHaveLength(test.expectedPatterns.length)
+          expect(
+            result.results.map((item) => ({
+              pattern: item.resourcePattern,
+              result: item.analysis.result
+            }))
+          ).toEqual(expect.arrayContaining(test.expectedPatterns))
+        }
 
         if (Object.hasOwn(test, 'expectedConditions')) {
           if (result.resultType !== 'single') {

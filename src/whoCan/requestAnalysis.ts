@@ -4,7 +4,7 @@ import {
   type EvaluationResult,
   type RequestAnalysis
 } from '@actsecurity/iam-simulate'
-import type { DeniedWhoCanExecutionResultWithDetails } from './WhoCanWorker.js'
+import type { WhoCanExecutionResultWithAnalysis } from './WhoCanWorker.js'
 import type { WhoCanDenyDetail } from './whoCan.js'
 
 /**
@@ -55,10 +55,18 @@ export interface SingleResourceLightRequestAnalysis extends LightResourceAnalysi
 export interface WildcardResourceLightRequestAnalysis {
   type: 'wildcard'
 
+  /** The requested resource pattern, when specified by the caller. */
+  requestedResourcePattern?: string
+
   /**
    * The overall result of the wildcard resource analysis, which is typically a combination of the results of the individual pattern analyses. This provides a high-level summary of whether the requested action is allowed or denied across all matched patterns, while the individual pattern analyses provide more granular details.
    */
   overallResult: EvaluationResult
+
+  /**
+   * Returns true if the overallResult is 'Allowed' but some of the patterns are any variant of 'Denied'
+   */
+  mixedResult?: true
 
   /**
    * The details of the analyses for each matched resource pattern/resource type pair.
@@ -101,11 +109,11 @@ function toLightResourceAnalysis(analysis: RequestAnalysis): LightResourceAnalys
 /**
  * Convert a full RequestAnalysis to a LightRequestAnalysis.
  *
- * @param executionResult - The denied execution result containing the RequestAnalysis to convert
+ * @param executionResult - The execution result containing the analyses to convert
  * @returns A LightRequestAnalysis with only the essential fields
  */
 export function toLightRequestAnalysis(
-  executionResult: DeniedWhoCanExecutionResultWithDetails
+  executionResult: WhoCanExecutionResultWithAnalysis
 ): LightRequestAnalysis {
   if (executionResult.type === 'denied_single') {
     return {
@@ -116,7 +124,11 @@ export function toLightRequestAnalysis(
   }
 
   // Wildcard case
-  const patterns = executionResult.deniedPatterns.map((details) => ({
+  const resourcePatterns =
+    executionResult.type === 'allowed_mixed_wildcard'
+      ? executionResult.patterns
+      : executionResult.deniedPatterns
+  const patterns = resourcePatterns.map((details) => ({
     pattern: details.pattern,
     resourceType: details.resourceType,
     ...toLightResourceAnalysis(details.analysis)
@@ -124,7 +136,12 @@ export function toLightRequestAnalysis(
 
   return {
     type: 'wildcard',
-    overallResult: executionResult.overallResult,
+    overallResult:
+      executionResult.type === 'allowed_mixed_wildcard' ? 'Allowed' : executionResult.overallResult,
+    ...(executionResult.type === 'allowed_mixed_wildcard' && { mixedResult: true as const }),
+    ...(executionResult.workItem.resource && {
+      requestedResourcePattern: executionResult.workItem.resource
+    }),
     patterns
   }
 }
@@ -132,13 +149,17 @@ export function toLightRequestAnalysis(
 /**
  * Gets the denial reasons for a denied SimulationResult.
  *
- * @param executionResult - The denied execution result containing the RequestAnalysis with denial reasons
+ * @param executionResult - The execution result containing analyses with denial reasons
  * @returns A WhoCanDenyDetail object containing the denial reasons and other details to be returned to the user
  */
 export function convertToDenialDetails(
-  executionResult: DeniedWhoCanExecutionResultWithDetails
+  executionResult: WhoCanExecutionResultWithAnalysis
 ): WhoCanDenyDetail {
-  const { principal, action } = executionResult.workItem
+  const { principal: simulatedPrincipal, resultPrincipal, action } = executionResult.workItem
+  const principal =
+    executionResult.type === 'allowed_mixed_wildcard'
+      ? (resultPrincipal ?? simulatedPrincipal)
+      : simulatedPrincipal
   const [service, actionName] = action.split(':')
 
   if (executionResult.type === 'denied_single') {

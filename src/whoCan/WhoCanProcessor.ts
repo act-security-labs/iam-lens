@@ -273,9 +273,6 @@ interface RequestState {
   /** Per-request deny details callback, if provided. */
   denyDetailsCallback?: (details: LightRequestAnalysis) => boolean
 
-  /** Number of deny-detail check round trips still in flight for this request. */
-  pendingDenyDetailsChecks: number
-
   /** Whether this request has been settled (success or failure). */
   settled: boolean
 
@@ -679,7 +676,7 @@ export class WhoCanProcessor {
       const task = this.dequeueNextScenario()
       worker.postMessage({ type: 'task', workerId: msg.workerId, task })
     } else if (msg.type === 'result') {
-      this.handleSimulationResult(msg.requestId, msg.result, !!msg.denyDetailsCheckWillFollow)
+      this.handleSimulationResult(msg.requestId, msg.result)
     } else if (msg.type === 'checkDenyDetails') {
       this.handleCheckDenyDetails(msg.requestId, msg.checkId, msg.lightAnalysis, worker)
     } else if (msg.type === 'denyDetailsResult') {
@@ -866,7 +863,6 @@ export class WhoCanProcessor {
       denyDetails: [],
       simulationCount: 0,
       denyDetailsCallback: submitted.request.denyDetailsCallback,
-      pendingDenyDetailsChecks: 0,
       settled: false,
       callbackInvoked: false,
       simulationErrors: []
@@ -1229,17 +1225,12 @@ export class WhoCanProcessor {
    */
   private handleSimulationResult(
     requestId: string,
-    result: JobResult<WhoCanAllowed | undefined, Record<string, unknown>>,
-    denyDetailsCheckWillFollow: boolean = false
+    result: JobResult<WhoCanAllowed | undefined, Record<string, unknown>>
   ): void {
     const state = this.requestStates.get(requestId)
     if (!state) return
 
     state.completed++
-
-    if (denyDetailsCheckWillFollow) {
-      state.pendingDenyDetailsChecks++
-    }
 
     if (state.settled) {
       // Request already settled (e.g., failed). Still count the result so
@@ -1279,12 +1270,6 @@ export class WhoCanProcessor {
     const shouldInclude =
       state && !state.settled ? (state.denyDetailsCallback?.(lightAnalysis) ?? false) : false
 
-    if (!shouldInclude && state) {
-      // No denyDetailsResult message will follow — decrement the counter
-      state.pendingDenyDetailsChecks--
-      this.checkRequestCompletion(state)
-    }
-
     worker.postMessage({
       type: 'denyDetailsCheckResult',
       checkId,
@@ -1293,8 +1278,7 @@ export class WhoCanProcessor {
   }
 
   /**
-   * Handles a deny details result from a worker thread. Decrements the
-   * pending deny-details counter and checks for request completion.
+   * Handles a deny details result from a worker thread or the main thread.
    *
    * @param requestId - The ID of the request.
    * @param denyDetail - The deny detail to store.
@@ -1302,10 +1286,6 @@ export class WhoCanProcessor {
   private handleDenyDetailsResult(requestId: string, denyDetail: WhoCanDenyDetail): void {
     const state = this.requestStates.get(requestId)
     if (!state) return
-
-    if (state.pendingDenyDetailsChecks > 0) {
-      state.pendingDenyDetailsChecks--
-    }
 
     if (!state.settled) {
       state.denyDetails.push(denyDetail)
@@ -1332,7 +1312,6 @@ export class WhoCanProcessor {
     if (!state.allScenariosCreated) return
     if (state.pendingPreparationJobs > 0) return
     if (state.created !== state.completed) return
-    if (state.pendingDenyDetailsChecks > 0) return
 
     // All work done — settle as success
     if (state.simulationErrors.length > 0) {
@@ -1454,7 +1433,6 @@ export class WhoCanProcessor {
     if (!state.callbackInvoked) return
     if (state.pendingPreparationJobs > 0) return
     if (state.created !== state.completed) return
-    if (state.pendingDenyDetailsChecks > 0) return
 
     this.removeFromActiveState(state)
   }

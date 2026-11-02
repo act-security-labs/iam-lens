@@ -43,9 +43,6 @@ const {
 interface WorkerJobProperties {
   /** The request ID this job belongs to. */
   requestId: string
-
-  /** Whether deny details should be collected for this work item's request. */
-  collectDenyDetails: boolean
 }
 
 /**
@@ -106,7 +103,7 @@ function createJobRunner(collectClient: IamCollectClient) {
     (taggedTask) => {
       const { requestId, ...workItem } = taggedTask
       return {
-        properties: { requestId, collectDenyDetails: workItem.collectDenyDetails },
+        properties: { requestId },
         execute: async () => {
           return executeWhoCan(workItem, collectClient, {
             s3AbacOverride,
@@ -118,64 +115,48 @@ function createJobRunner(collectClient: IamCollectClient) {
       }
     },
     async (result) => {
-      const { requestId, collectDenyDetails } = result.properties
+      const { requestId } = result.properties
 
       if (result.status === 'fulfilled') {
         const executionResult = result.value
-
-        if (executionResult.type === 'allowed') {
-          parentPort!.postMessage({
-            type: 'result',
-            requestId,
-            result: {
-              status: 'fulfilled',
-              value: executionResult.allowed,
-              properties: {}
-            }
+        if (
+          executionResult.type === 'allowed_mixed_wildcard' ||
+          executionResult.type === 'denied_single' ||
+          executionResult.type === 'denied_wildcard'
+        ) {
+          const checkId = denyDetailsCheckId++
+          const response = new Promise<boolean>((resolve) => {
+            pendingDenyDetailsChecks[checkId] = resolve
           })
-        } else {
-          // Check if deny details check will follow
-          const hasDetails =
-            executionResult.type === 'denied_single' || executionResult.type === 'denied_wildcard'
-          const denyDetailsCheckWillFollow = collectDenyDetails && hasDetails
-
-          // Post count-only result for denied simulations
           parentPort!.postMessage({
-            type: 'result',
+            type: 'checkDenyDetails',
             requestId,
-            denyDetailsCheckWillFollow,
-            result: {
-              status: 'fulfilled',
-              value: undefined,
-              properties: {}
-            }
+            checkId,
+            workItem: executionResult.workItem,
+            lightAnalysis: toLightRequestAnalysis(executionResult)
           })
-
-          if (denyDetailsCheckWillFollow) {
-            const lightAnalysis = toLightRequestAnalysis(executionResult)
-            const checkId = denyDetailsCheckId++
-
+          if (await response) {
             parentPort!.postMessage({
-              type: 'checkDenyDetails',
+              type: 'denyDetailsResult',
               requestId,
-              checkId,
-              workItem: executionResult.workItem,
-              lightAnalysis
+              denyDetail: convertToDenialDetails(executionResult)
             })
-
-            const shouldInclude = await new Promise<boolean>((resolve) => {
-              pendingDenyDetailsChecks[checkId] = resolve
-            })
-
-            if (shouldInclude) {
-              parentPort!.postMessage({
-                type: 'denyDetailsResult',
-                requestId,
-                denyDetail: convertToDenialDetails(executionResult)
-              })
-            }
           }
         }
+
+        parentPort!.postMessage({
+          type: 'result',
+          requestId,
+          result: {
+            status: 'fulfilled',
+            value:
+              executionResult.type === 'allowed' ||
+              executionResult.type === 'allowed_mixed_wildcard'
+                ? executionResult.allowed
+                : undefined,
+            properties: {}
+          }
+        })
       } else {
         // Error case — pass through with requestId
         parentPort!.postMessage({
