@@ -1,3 +1,10 @@
+## [0.1.187](https://github.com/act-security-labs/iam-lens/compare/v0.1.186...v0.1.187) (2026-11-02)
+
+
+### Features
+
+* return mixed wildcard denial details ([#240](https://github.com/act-security-labs/iam-lens/issues/240)) ([15fa487](https://github.com/act-security-labs/iam-lens/commit/15fa48742fda51c030a6063162b5dfbf2c4e9696))
+
 ## [0.1.186](https://github.com/act-security-labs/iam-lens/compare/v0.1.185...v0.1.186) (2026-11-02)
 
 
