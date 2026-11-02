@@ -1,3 +1,10 @@
+## [0.1.186](https://github.com/act-security-labs/iam-lens/compare/v0.1.185...v0.1.186) (2026-11-02)
+
+
+### Bug Fixes
+
+* support wildcard foundation model requests ([#242](https://github.com/act-security-labs/iam-lens/issues/242)) ([f3df4f2](https://github.com/act-security-labs/iam-lens/commit/f3df4f21d2bca4f93f761d9c97b6569191c3f32a))
+
 ## [0.1.185](https://github.com/act-security-labs/iam-lens/compare/v0.1.184...v0.1.185) (2026-11-02)
 
 
