@@ -1,3 +1,10 @@
+## [0.1.185](https://github.com/act-security-labs/iam-lens/compare/v0.1.184...v0.1.185) (2026-11-02)
+
+
+### Features
+
+* standardize case-insensitive comparisons ([#241](https://github.com/act-security-labs/iam-lens/issues/241)) ([7923e7a](https://github.com/act-security-labs/iam-lens/commit/7923e7ae9aba8739734ff2c9ca46da6076a76f11))
+
 ## [0.1.184](https://github.com/act-security-labs/iam-lens/compare/v0.1.183...v0.1.184) (2026-11-01)
 
 
