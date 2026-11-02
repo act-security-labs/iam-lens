@@ -1,5 +1,5 @@
 import { loadPolicy, type Statement } from '@actsecurity/iam-policy'
-import { splitArnParts } from '@actsecurity/iam-utils'
+import { equalsIgnoreCase, splitArnParts } from '@actsecurity/iam-utils'
 import { IamCollectClient } from '../../../collect/client.js'
 import { Permission } from '../../permission.js'
 import { addStatementToPermissionSet, PermissionSet } from '../../permissionSet.js'
@@ -130,5 +130,5 @@ export async function kmsKeysSameAccount(
  * @returns true if the statement has a kms:ViaService condition, false otherwise
  */
 function statementHasViaServiceCondition(statement: Statement): boolean {
-  return statement.conditions().some((c) => c.conditionKey().toLowerCase() === 'kms:viaservice')
+  return statement.conditions().some((c) => equalsIgnoreCase(c.conditionKey(), 'kms:viaservice'))
 }

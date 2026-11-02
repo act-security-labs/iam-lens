@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { testStore } from '../collect/inMemoryClient.js'
-import { createContextKeys, servicePrincipalKmsCallerAccountPlaceholder } from './contextKeys.js'
+import {
+  contextValue,
+  createContextKeys,
+  servicePrincipalKmsCallerAccountPlaceholder
+} from './contextKeys.js'
 import { type InternalSimulationRequest, SimulationRequest } from './simulate.js'
 
 const defaultSimulationRequest: SimulationRequest = {
@@ -11,6 +15,18 @@ const defaultSimulationRequest: SimulationRequest = {
   action: 's3:GetObject',
   customContextKeys: {}
 }
+
+describe('contextValue', () => {
+  it('matches Unicode case variants without ignoring accents', () => {
+    //Given context keys with non-ASCII characters
+    const context = { 'example:Σ': 'sigma', 'example:café': 'accented' }
+
+    //When looking up case variants and a distinct unaccented name
+    //Then case variants match without treating accents as equivalent
+    expect(contextValue(context, 'EXAMPLE:ς')).toBe('sigma')
+    expect(contextValue(context, 'example:CAFE')).toBeUndefined()
+  })
+})
 
 describe('createContextKeys', () => {
   describe('aws:PrincipalArn', () => {

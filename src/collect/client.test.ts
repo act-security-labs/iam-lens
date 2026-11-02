@@ -115,6 +115,24 @@ describe('IamCollectClient', () => {
       expect(exists).toBe(true)
     })
 
+    it('does not resolve a path-qualified role with a different final role name', async () => {
+      //Given a path-qualified role in the account
+      const { store, client } = testStore()
+      const accountId = '123456789012'
+      const storedArn = `arn:aws:iam::${accountId}:role/team/ExampleRole`
+      await store.saveResourceMetadata(accountId, storedArn, 'metadata', {
+        arn: storedArn,
+        accountId,
+        resourceType: 'role'
+      })
+
+      //When resolving a role with a different final path segment
+      const result = await client.resolvePrincipalArn(`arn:aws:iam::${accountId}:role/OtherRole`)
+
+      //Then the stored role is not returned
+      expect(result).toBeUndefined()
+    })
+
     it('should find a path-qualified IAM role by role name when an assumed-role ARN omits the path', async () => {
       // Given an AWS SSO-style role stored with its IAM path and canonical capitalization
       const { store, client } = testStore()

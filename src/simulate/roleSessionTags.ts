@@ -4,7 +4,7 @@ import {
   type Statement,
   type ValidatedPolicy
 } from '@actsecurity/iam-policy'
-import { actionMatchesPattern } from '@actsecurity/iam-utils'
+import { actionMatchesPattern, equalsIgnoreCase } from '@actsecurity/iam-utils'
 
 const tagSessionAction = 'sts:TagSession'
 const tagKeysConditionKey = 'aws:tagkeys'
@@ -153,7 +153,7 @@ function statementAllowsTagSession(statement: Statement): boolean {
 function tagCapabilityForStatement(statement: Statement): RoleSessionTagCapability {
   const tagKeysConditions = statement
     .conditions()
-    .filter((condition) => stringsEqualIgnoreCase(condition.conditionKey(), tagKeysConditionKey))
+    .filter((condition) => equalsIgnoreCase(condition.conditionKey(), tagKeysConditionKey))
 
   if (tagKeysConditions.length === 0 || tagKeysConditions.some(conditionIsUnbounded)) {
     return anySessionTag
@@ -179,8 +179,8 @@ function conditionIsUnbounded(condition: Condition): boolean {
 
   const baseOperator = operation.baseOperator()
   if (
-    !stringsEqualIgnoreCase(baseOperator, 'StringEquals') &&
-    !stringsEqualIgnoreCase(baseOperator, 'StringEqualsIgnoreCase')
+    !equalsIgnoreCase(baseOperator, 'StringEquals') &&
+    !equalsIgnoreCase(baseOperator, 'StringEqualsIgnoreCase')
   ) {
     return true
   }
@@ -219,7 +219,7 @@ function intersectTagKeyConditions(conditions: Condition[]): SessionTagKey[] {
  * @returns entries carrying the condition's case-comparison semantics
  */
 function entriesForCondition(condition: Condition): SessionTagKey[] {
-  const ignoreCase = stringsEqualIgnoreCase(
+  const ignoreCase = equalsIgnoreCase(
     condition.operation().baseOperator(),
     'StringEqualsIgnoreCase'
   )
@@ -234,7 +234,7 @@ function entriesForCondition(condition: Condition): SessionTagKey[] {
  * @returns true when the key matches the entry
  */
 function tagKeyMatchesEntry(tagKey: string, entry: SessionTagKey): boolean {
-  return entry.ignoreCase ? stringsEqualIgnoreCase(tagKey, entry.tagKey) : tagKey === entry.tagKey
+  return entry.ignoreCase ? equalsIgnoreCase(tagKey, entry.tagKey) : tagKey === entry.tagKey
 }
 
 /**
@@ -251,7 +251,7 @@ function uniqueTagKeys(entries: SessionTagKey[]): SessionTagKey[] {
         (existing) =>
           existing.ignoreCase === entry.ignoreCase &&
           (entry.ignoreCase
-            ? stringsEqualIgnoreCase(existing.tagKey, entry.tagKey)
+            ? equalsIgnoreCase(existing.tagKey, entry.tagKey)
             : existing.tagKey === entry.tagKey)
       )
     ) {
@@ -259,17 +259,6 @@ function uniqueTagKeys(entries: SessionTagKey[]): SessionTagKey[] {
     }
   }
   return unique
-}
-
-/**
- * Compares strings without case sensitivity or normalized string allocations.
- *
- * @param left first value to compare
- * @param right second value to compare
- * @returns true when the values compare equally without case sensitivity
- */
-function stringsEqualIgnoreCase(left: string, right: string): boolean {
-  return left.localeCompare(right, undefined, { sensitivity: 'base' }) === 0
 }
 
 /**

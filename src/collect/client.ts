@@ -15,8 +15,10 @@ import {
 } from '@actsecurity/iam-policy'
 import {
   convertAssumedRoleArnToRoleArn,
+  equalsIgnoreCase,
   isAssumedRoleArn,
-  splitArnParts
+  splitArnParts,
+  splitSlice
 } from '@actsecurity/iam-utils'
 import BitSet from 'bitset'
 import { gunzipSync, gzipSync } from 'zlib'
@@ -317,7 +319,10 @@ export class IamCollectClient {
         return undefined
       }
 
-      const roleName = arnParts.resourcePath?.split('/').at(-1)?.toLowerCase()
+      const roleName =
+        arnParts.resourcePath === undefined
+          ? undefined
+          : splitSlice(arnParts.resourcePath, '/').at(-1)
       if (!roleName) {
         return undefined
       }
@@ -325,10 +330,15 @@ export class IamCollectClient {
       const accountPrincipals = await this.getAllPrincipalsInAccount(accountId)
       const matchingRole = accountPrincipals.find((candidateArn) => {
         const candidateParts = splitArnParts(candidateArn)
+        const candidateRoleName =
+          candidateParts.resourcePath === undefined
+            ? undefined
+            : splitSlice(candidateParts.resourcePath, '/').at(-1)
         return (
           candidateParts.service === 'iam' &&
           candidateParts.resourceType === 'role' &&
-          candidateParts.resourcePath?.split('/').at(-1)?.toLowerCase() === roleName
+          candidateRoleName !== undefined &&
+          equalsIgnoreCase(candidateRoleName, roleName)
         )
       })
 

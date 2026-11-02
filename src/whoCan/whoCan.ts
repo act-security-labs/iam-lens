@@ -23,7 +23,11 @@ import {
   type RequestDenial,
   type RequestGrant
 } from '@actsecurity/iam-simulate'
-import { mostSpecificMatchingResourceTypePatterns, splitArnParts } from '@actsecurity/iam-utils'
+import {
+  equalsIgnoreCase,
+  mostSpecificMatchingResourceTypePatterns,
+  splitArnParts
+} from '@actsecurity/iam-utils'
 import { Arn } from '../utils/arn.js'
 import { type S3AbacOverride } from '../utils/s3Abac.js'
 import { AssumeRoleActions } from '../utils/sts.js'
@@ -530,7 +534,7 @@ const UNNAMED_SERVICE_SCALAR_KEYS = new Set([
 function isPositiveScalarOperator(op: ConditionOperation): boolean {
   return (
     op.value().toLowerCase().startsWith('stringequals') ||
-    op.baseOperator().toLowerCase() === 'stringlike'
+    equalsIgnoreCase(op.baseOperator(), 'stringlike')
   )
 }
 
@@ -589,7 +593,7 @@ function checkForServicePrincipalConditions(conditions: Condition[]): ServicePri
       if (
         isBoolOrStringEquals &&
         values.length > 0 &&
-        values.every((v) => v.toLowerCase() === 'true')
+        values.every((v) => equalsIgnoreCase(v, 'true'))
       ) {
         hasUnnamedServiceKey = true
       }
@@ -773,7 +777,7 @@ export async function accountsToCheckBasedOnResourcePolicy(
               } else if (isExactOperator && !value.includes('*') && !value.includes('?')) {
                 // Exact operator with a dynamic variable but no wildcards — try account extraction
                 const segments = splitArnIgnoringDynamicVars(value)
-                if (segments.length >= 6 && segments[0].toLowerCase() === 'arn') {
+                if (segments.length >= 6 && equalsIgnoreCase(segments[0], 'arn')) {
                   const account = segments[4]
                   if (account && !hasWildcardOrDynamic(account)) {
                     specificAccounts.push(account)
@@ -783,7 +787,7 @@ export async function accountsToCheckBasedOnResourcePolicy(
               } else {
                 // Pattern operator or value with wildcards — try account extraction
                 const segments = splitArnIgnoringDynamicVars(value)
-                if (segments.length >= 6 && segments[0].toLowerCase() === 'arn') {
+                if (segments.length >= 6 && equalsIgnoreCase(segments[0], 'arn')) {
                   const account = segments[4]
                   if (account && !hasWildcardOrDynamic(account)) {
                     specificAccounts.push(account)

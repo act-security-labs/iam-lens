@@ -1,5 +1,5 @@
 import { loadPolicy } from '@actsecurity/iam-policy'
-import { actionMatchesPattern, splitArnParts } from '@actsecurity/iam-utils'
+import { actionMatchesPattern, equalsIgnoreCase, splitArnParts } from '@actsecurity/iam-utils'
 
 /**
  * Set of condition operators that can be used with aws:PrincipalArn to
@@ -160,7 +160,7 @@ export function buildPrincipalArnFilter(resourcePolicy: any): PrincipalArnFilter
     const conditions = statement.conditions()
 
     for (const cond of conditions) {
-      if (cond.conditionKey().toLowerCase() !== 'aws:principalarn') {
+      if (!equalsIgnoreCase(cond.conditionKey(), 'aws:principalarn')) {
         continue
       }
 
@@ -227,7 +227,9 @@ export function buildPrincipalArnFilter(resourcePolicy: any): PrincipalArnFilter
     if (conditions.length !== 1) continue
 
     const cond = conditions[0]
-    if (cond.conditionKey().toLowerCase() !== 'aws:principalarn') continue
+    if (!equalsIgnoreCase(cond.conditionKey(), 'aws:principalarn')) {
+      continue
+    }
     if (cond.operation().isIfExists()) continue
 
     const values = cond.conditionValues()

@@ -1,3 +1,4 @@
+import { equalsIgnoreCase } from '@actsecurity/iam-utils'
 import { iamActionDetails, iamActionExists, iamResourceTypeDetails } from '@actsecurity/iam-data'
 import {
   actionSupportsAwsResourceInfoContextKeys,
@@ -163,9 +164,7 @@ export function contextHasKey(context: ContextKeys, key: string): boolean {
  * @returns The value of the context key, or undefined if it doesn't exist.
  */
 export function contextValue(context: ContextKeys, key: string): string | string[] | undefined {
-  const matchingKey = Object.keys(context).find(
-    (contextKey) => contextKey.toLowerCase() === key.toLowerCase()
-  )
+  const matchingKey = Object.keys(context).find((contextKey) => equalsIgnoreCase(contextKey, key))
   return matchingKey ? context[matchingKey] : undefined
 }
 
@@ -198,7 +197,7 @@ export async function createContextKeys(
   if (!principal) {
     contextKeys['aws:userid'] = 'anonymous'
     contextKeys['aws:PrincipalType'] = 'Anonymous'
-    if (service.toLowerCase() === 'sqs') {
+    if (equalsIgnoreCase(service, 'sqs')) {
       contextKeys['aws:PrincipalAccount'] = 'anonymous'
     }
   } else if (isArnPrincipal(principal)) {
@@ -233,7 +232,7 @@ export async function createContextKeys(
 
     contextKeys['aws:PrincipalIsAWSService'] = 'false'
 
-    if (service.toLowerCase() === 'kms') {
+    if (equalsIgnoreCase(service, 'kms')) {
       contextKeys['kms:CallerAccount'] = principalAccountId
     }
 
@@ -308,7 +307,7 @@ export async function createContextKeys(
     contextKeys['aws:SourceOrgID'] = contextKeys['aws:ResourceOrgID']
     contextKeys['aws:SourceOrgPaths'] = contextKeys['aws:ResourceOrgPaths']
 
-    if (service.toLowerCase() === 'kms') {
+    if (equalsIgnoreCase(service, 'kms')) {
       contextKeys['kms:CallerAccount'] = servicePrincipalKmsCallerAccountPlaceholder
     }
 
@@ -381,8 +380,8 @@ function applyContextKeyOverrides(
   contextKeyOverrides: ContextKeys
 ): void {
   for (const [key, value] of Object.entries(contextKeyOverrides)) {
-    const generatedKey = Object.keys(contextKeys).find(
-      (contextKey) => contextKey.toLowerCase() === key.toLowerCase()
+    const generatedKey = Object.keys(contextKeys).find((contextKey) =>
+      equalsIgnoreCase(contextKey, key)
     )
     if (generatedKey && generatedKey !== key) {
       delete contextKeys[generatedKey]

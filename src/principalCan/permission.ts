@@ -1,3 +1,4 @@
+import { equalsIgnoreCase } from '@actsecurity/iam-utils'
 import {
   intersectPrincipalConstraints,
   normalizePrincipalConstraint,
@@ -1419,7 +1420,11 @@ function intersectValuesForOperator(
     // Boolean operators: values must match exactly
     case 'bool':
     case 'null': {
-      if (valsA[0]?.toLowerCase() !== valsB[0]?.toLowerCase()) {
+      if (
+        valsA[0] === undefined || valsB[0] === undefined
+          ? valsA[0] !== valsB[0]
+          : !equalsIgnoreCase(valsA[0], valsB[0])
+      ) {
         return null
       }
       return [valsA[0]]
@@ -1559,7 +1564,9 @@ export function invertConditions(
     inverted[invertedOp] = {}
     for (const [key, vals] of Object.entries(keyMap)) {
       if (coreOp === 'bool' || coreOp === 'null') {
-        inverted[invertedOp][key] = vals.map((v) => (v.toLowerCase() === 'true' ? 'false' : 'true'))
+        inverted[invertedOp][key] = vals.map((v) =>
+          equalsIgnoreCase(v, 'true') ? 'false' : 'true'
+        )
       } else {
         inverted[invertedOp][key] = Array.from(vals)
       }
