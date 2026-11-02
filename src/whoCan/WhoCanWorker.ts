@@ -113,21 +113,34 @@ export interface DeniedWildcardWhoCanExecutionResult {
   deniedPatterns: WhoCanDenyResourceDetails[]
 }
 
+/** An allowed wildcard simulation containing denied resource patterns. */
+export interface AllowedMixedWildcardWhoCanExecutionResult {
+  type: 'allowed_mixed_wildcard'
+  workItem: WhoCanWorkItem
+  allowed: WhoCanAllowed
+  /** Analyses for all tested patterns, both allowed and denied. */
+  patterns: WhoCanDenyResourceDetails[]
+  /** The subset of patterns whose simulation was denied. */
+  deniedPatterns: WhoCanDenyResourceDetails[]
+}
+
 /**
- * The result of executing a whoCan work item.
- * Contains either the allowed result or the deny analysis (but not both).
+ * The result of executing a whoCan work item, including mixed wildcard outcomes.
  */
 export type WhoCanExecutionResult =
   | AllowedWhoCanExecutionResult
+  | AllowedMixedWildcardWhoCanExecutionResult
   | DeniedWhoCanExecutionResult
   | DeniedSingleWhoCanExecutionResult
   | DeniedWildcardWhoCanExecutionResult
 
 /**
- * Union type for denied execution results that include detailed analysis.
+ * Execution results carrying analyses used to select and explain denials.
  */
-export type DeniedWhoCanExecutionResultWithDetails =
-  DeniedSingleWhoCanExecutionResult | DeniedWildcardWhoCanExecutionResult
+export type WhoCanExecutionResultWithAnalysis =
+  | DeniedSingleWhoCanExecutionResult
+  | DeniedWildcardWhoCanExecutionResult
+  | AllowedMixedWildcardWhoCanExecutionResult
 
 /**
  * The possible values for the `type` discriminator of a WhoCanExecutionResult.
@@ -370,6 +383,25 @@ function mapSimulationResultToWhoCanExecutionResult(
       }
       if (allowedPatterns.length > 0) {
         allowed.allowedPatterns = allowedPatterns
+      }
+    }
+
+    if (
+      collectDenyDetails &&
+      simulationResponse.resultType === 'wildcard' &&
+      simulationResponse.results.some((result) => result.analysis.result !== 'Allowed')
+    ) {
+      const patterns = simulationResponse.results.map((result) => ({
+        pattern: result.resourcePattern,
+        resourceType: result.resourceType,
+        analysis: result.analysis
+      }))
+      return {
+        type: 'allowed_mixed_wildcard',
+        workItem,
+        allowed,
+        patterns,
+        deniedPatterns: patterns.filter((pattern) => pattern.analysis.result !== 'Allowed')
       }
     }
 

@@ -15,7 +15,10 @@
         {
           "Effect": "Deny",
           "Action": ["s3:GetObject"],
-          "Resource": ["arn:aws:s3:::wildcard-bucket/reports/private/*"]
+          "Resource": [
+            "arn:aws:s3:::wildcard-bucket/reports/private/*",
+            "arn:aws:s3:::wildcard-bucket/reports/restricted/*"
+          ]
         },
         {
           "Effect": "Allow",
