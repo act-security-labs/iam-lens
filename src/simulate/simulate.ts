@@ -1,3 +1,4 @@
+import { equalsIgnoreCase } from '@actsecurity/iam-utils'
 import { iamActionDetails, iamActionExists, iamServiceExists } from '@actsecurity/iam-data'
 import { type ValidatedPolicy } from '@actsecurity/iam-policy'
 import {
@@ -855,12 +856,7 @@ function makeGeneratedDiscoveryContextKeyNames(
  */
 function isTagContextKey(key: string): boolean {
   const slashIndex = key.indexOf('/')
-  return (
-    slashIndex >= 3 &&
-    key
-      .slice(slashIndex - 3, slashIndex + 1)
-      .localeCompare('tag/', undefined, { sensitivity: 'base' }) === 0
-  )
+  return slashIndex >= 3 && equalsIgnoreCase(key.slice(slashIndex - 3, slashIndex + 1), 'tag/')
 }
 
 const awsSourceKeyPrefix = 'aws:source'
@@ -873,11 +869,7 @@ const awsPrincipalTagPrefix = 'aws:principaltag/'
  * @returns true when the key starts with `aws:PrincipalTag/`, ignoring case
  */
 function isPrincipalTagContextKey(key: string): boolean {
-  return (
-    key
-      .slice(0, awsPrincipalTagPrefix.length)
-      .localeCompare(awsPrincipalTagPrefix, undefined, { sensitivity: 'base' }) === 0
-  )
+  return equalsIgnoreCase(key.slice(0, awsPrincipalTagPrefix.length), awsPrincipalTagPrefix)
 }
 
 const anonymousAbsentContextKeys = new Set([
@@ -1012,7 +1004,7 @@ export function mergeDiscoveryContextKeyConstraints(
  * @returns whether the caller constraint overrides the generated constraint
  */
 function constraintKeyNamesMatch(callerKeyName: string, generatedKeyName: string): boolean {
-  return callerKeyName.localeCompare(generatedKeyName, undefined, { sensitivity: 'base' }) === 0
+  return equalsIgnoreCase(callerKeyName, generatedKeyName)
 }
 
 /**
@@ -1052,7 +1044,7 @@ export function discoveryConstraintForGeneratedKey(
   }
 
   const isServiceCallerAccountInDiscovery =
-    keyName.localeCompare('kms:CallerAccount', undefined, { sensitivity: 'base' }) === 0 &&
+    equalsIgnoreCase(keyName, 'kms:CallerAccount') &&
     simulationRequest.simulationMode === 'Discovery' &&
     simulationRequest.principal !== undefined &&
     isServicePrincipal(simulationRequest.principal)
@@ -1061,9 +1053,7 @@ export function discoveryConstraintForGeneratedKey(
     return { keyName, presenceIsKnown: true, valueIsKnown: false }
   }
 
-  if (
-    keyName.slice(0, 10).localeCompare(awsSourceKeyPrefix, undefined, { sensitivity: 'base' }) === 0
-  ) {
+  if (equalsIgnoreCase(keyName.slice(0, 10), awsSourceKeyPrefix)) {
     return { keyName, presenceIsKnown: true, valueIsKnown: false }
   }
 
@@ -1081,9 +1071,7 @@ function hasCustomContextKey(customContextKeys: ContextKeys, keyName: string): b
   if (Object.hasOwn(customContextKeys, keyName)) {
     return true
   }
-  return Object.keys(customContextKeys).some(
-    (customKey) => customKey.toLowerCase() === keyName.toLowerCase()
-  )
+  return Object.keys(customContextKeys).some((customKey) => equalsIgnoreCase(customKey, keyName))
 }
 
 /**
@@ -1135,7 +1123,7 @@ async function getResourcePolicies(
   }
 
   const useResourcePolicy =
-    resourceArn !== undefined && !(isIamRoleArn(resourceArn) && service.toLowerCase() === 'iam')
+    resourceArn !== undefined && !(isIamRoleArn(resourceArn) && equalsIgnoreCase(service, 'iam'))
 
   return {
     resourcePolicy: useResourcePolicy ? resourcePolicy : undefined,
@@ -1181,7 +1169,7 @@ async function getResourceControlPolicies(
     resourceArn &&
     !isAwsFoundationModelArn(resourceArn) &&
     !servicePrincipalAssumesServiceLinkedRole &&
-    action.localeCompare(kmsRetireGrantAction, undefined, { sensitivity: 'base' }) !== 0
+    !equalsIgnoreCase(action, kmsRetireGrantAction)
   ) {
     const resourceArnParts = splitArnParts(resourceArn)
     const isAwsManagedKmsKey =
