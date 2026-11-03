@@ -1,3 +1,10 @@
+## [0.1.189](https://github.com/act-security-labs/iam-lens/compare/v0.1.188...v0.1.189) (2026-11-03)
+
+
+### Bug Fixes
+
+* derive requested region from resource context ([#244](https://github.com/act-security-labs/iam-lens/issues/244)) ([713233c](https://github.com/act-security-labs/iam-lens/commit/713233c799c558b96fc3d31d32ba187f5476ba90))
+
 ## [0.1.188](https://github.com/act-security-labs/iam-lens/compare/v0.1.187...v0.1.188) (2026-11-03)
 
 
