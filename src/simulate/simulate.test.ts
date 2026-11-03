@@ -626,6 +626,34 @@ describe('role session-tag Discovery constraints', () => {
     return result.result.analysis
   }
 
+  it('evaluates a Unicode-equivalent custom tag override as authoritative', async () => {
+    //Given a stored role tag and an identity policy using ordinary sigma
+    const { store, client } = testStore()
+    const roleArn = `arn:aws:iam::${accountId}:role/UnicodeTaggedRole`
+    await saveRole(store, {
+      arn: roleArn,
+      inlinePolicies: taggedAccessPolicy('σ'),
+      trustPolicy: {
+        Version: '2012-10-17',
+        Statement: [{ Effect: 'Allow', Principal: '*', Action: 'sts:AssumeRole' }]
+      }
+    })
+    await store.saveResourceMetadata(accountId, roleArn, 'tags', { σ: 'Other' })
+
+    //When a caller overrides the same tag using final sigma
+    const analysis = await discoveryAnalysis(roleArn, client, {
+      'aws:PrincipalTag/ς': 'Engineering'
+    })
+
+    //Then the override satisfies the condition without leaving it unresolved
+    expect(analysis.result).toBe('Allowed')
+    expect(analysis.ignoredConditions?.identity?.allow).toBeUndefined()
+
+    //And a nonmatching override must not grant access
+    const nonmatching = await runDiscovery(roleArn, client, { 'aws:PrincipalTag/ς': 'Finance' })
+    expect(nonmatching.overallResult).toBe('ImplicitlyDenied')
+  })
+
   it('keeps stored role tags strict without a TagSession Allow', async () => {
     //Given a tagged role whose trust policy only permits AssumeRole
     const { store, client } = testStore()
@@ -693,6 +721,34 @@ describe('role session-tag Discovery constraints', () => {
     expect(analysis.conditions).toEqual(
       expect.objectContaining({ key: 'aws:PrincipalTag/Department' })
     )
+  })
+
+  it('documents the stored-tag alias limitation for distinct IAM string values', async () => {
+    //Given a role whose trust policy permits a tag name equivalent to the stored context key
+    const { store, client } = testStore()
+    const roleArn = `arn:aws:iam::${accountId}:role/UnicodeAliasRole`
+    await saveRole(store, {
+      arn: roleArn,
+      inlinePolicies: taggedAccessPolicy('i'),
+      trustPolicy: {
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Principal: '*',
+            Action: ['sts:AssumeRole', 'sts:TagSession'],
+            Condition: { 'ForAllValues:StringEquals': { 'aws:TagKeys': ['İ'] } }
+          }
+        ]
+      }
+    })
+    await store.saveResourceMetadata(accountId, roleArn, 'tags', { i: 'Other' })
+
+    //When discovering access using the collected role tag
+    const result = await runDiscovery(roleArn, client)
+
+    //Then the current value-based matching keeps the stored value authoritative
+    expect(result.overallResult).toBe('ImplicitlyDenied')
   })
 
   it('returns conditional access for an unrestricted TagSession Allow', async () => {
