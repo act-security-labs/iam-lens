@@ -696,7 +696,7 @@ export class IamCollectClient {
         'metadata',
         {}
       )
-      return metadata.region
+      return metadata?.region
     })
   }
 

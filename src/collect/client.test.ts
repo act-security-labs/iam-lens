@@ -36,6 +36,22 @@ const extraSCPs = [1, 2, 3, 4, 5].map((i) => ({
 }))
 
 describe('IamCollectClient', () => {
+  describe('getRegionForBucket', () => {
+    it('returns an unknown region when stored bucket metadata is null', async () => {
+      // Given a bucket with null metadata
+      const { store, client } = testStore()
+      const accountId = '123456789012'
+      const bucketArn = 'arn:aws:s3:::example-bucket'
+      await store.saveResourceMetadata(accountId, bucketArn, 'metadata', 'null')
+
+      // When looking up the region for an object in the bucket
+      const region = await client.getRegionForBucket(accountId, `${bucketArn}/example-object`)
+
+      // Then the region remains unknown
+      expect(region).toBeUndefined()
+    })
+  })
+
   describe('accountExists', () => {
     it('should return true if account exists', async () => {
       // Given an account that exists
