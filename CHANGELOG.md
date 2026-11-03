@@ -1,3 +1,10 @@
+## [0.1.188](https://github.com/act-security-labs/iam-lens/compare/v0.1.187...v0.1.188) (2026-11-03)
+
+
+### Bug Fixes
+
+* align session tag value comparisons with IAM ([#243](https://github.com/act-security-labs/iam-lens/issues/243)) ([1919b33](https://github.com/act-security-labs/iam-lens/commit/1919b33d9726af7f98e45bbadfc183f7b7e567bf))
+
 ## [0.1.187](https://github.com/act-security-labs/iam-lens/compare/v0.1.186...v0.1.187) (2026-11-02)
 
 
