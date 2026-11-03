@@ -29,6 +29,89 @@ describe('contextValue', () => {
 })
 
 describe('createContextKeys', () => {
+  describe('aws:RequestedRegion', () => {
+    it('uses a concrete ARN region', async () => {
+      //Given a regional resource
+      const request = {
+        ...defaultSimulationRequest,
+        resourceArn: 'arn:aws:sqs:eu-west-1:123456789012:queue',
+        action: 'sqs:SendMessage'
+      }
+
+      //When deriving the request context
+      const { contextKeys } = await createContextKeys(testStore().client, request, 'sqs', {})
+
+      //Then the requested region matches the ARN
+      expect(contextKeys['aws:RequestedRegion']).toBe('eu-west-1')
+    })
+
+    it('uses collected bucket region for both bucket and object ARNs', async () => {
+      //Given collected bucket metadata
+      const { store, client } = testStore()
+      const bucket = 'arn:aws:s3:::test-bucket'
+      await store.saveResourceMetadata('123456789012', bucket, 'metadata', {
+        arn: bucket,
+        region: 'eu-west-2'
+      })
+
+      //When deriving context for the bucket and its object
+      const results = await Promise.all(
+        [bucket, `${bucket}/key`].map((resourceArn) =>
+          createContextKeys(client, { ...defaultSimulationRequest, resourceArn }, 's3', {})
+        )
+      )
+
+      //Then both use the stored bucket region
+      expect(results.map(({ contextKeys }) => contextKeys['aws:RequestedRegion'])).toEqual([
+        'eu-west-2',
+        'eu-west-2'
+      ])
+    })
+
+    it('leaves missing and wildcard regions unknown', async () => {
+      //Given a global ARN, an uncollected bucket, and wildcard regions
+      const resources = [
+        'arn:aws:s3:::unknown-bucket',
+        'arn:aws:iam::123456789012:role/example',
+        'arn:aws:sqs:*:123456789012:queue',
+        'arn:aws:sqs:eu-west-?:123456789012:queue'
+      ]
+
+      //When deriving context for each
+      const client = testStore().client
+      const results = await Promise.all(
+        resources.map((resourceArn) =>
+          createContextKeys(client, { ...defaultSimulationRequest, resourceArn }, 's3', {})
+        )
+      )
+
+      //Then no concrete region is fabricated
+      expect(results.map(({ contextKeys }) => contextKeys['aws:RequestedRegion'])).toEqual([
+        undefined,
+        undefined,
+        undefined,
+        undefined
+      ])
+    })
+
+    it('preserves a caller region override regardless of key casing', async () => {
+      //Given a regional ARN and explicit endpoint region
+      const request = {
+        ...defaultSimulationRequest,
+        resourceArn: 'arn:aws:sqs:eu-west-1:123456789012:queue'
+      }
+
+      //When deriving context with the override
+      const { contextKeys } = await createContextKeys(testStore().client, request, 'sqs', {
+        'AWS:requestedregion': 'us-west-2'
+      })
+
+      //Then the override takes precedence without duplicate keys
+      expect(contextKeys['AWS:requestedregion']).toBe('us-west-2')
+      expect(contextKeys['aws:RequestedRegion']).toBeUndefined()
+    })
+  })
+
   describe('aws:PrincipalArn', () => {
     it('should set aws:PrincipalArn to the principal ARN for IAM users', async () => {
       // Given a simulation request with an IAM user principal ARN

@@ -134,6 +134,260 @@ interface WhoCanIntegrationTest {
 
 const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
   {
+    name: 'requested region: model in denied region',
+    data: '3',
+    request: {
+      resource: 'arn:aws:bedrock:eu-west-2::foundation-model/example.model-v1:0',
+      resourceAccount: '400000000003',
+      actions: ['bedrock:GetFoundationModel'],
+      principalScope: { principals: ['arn:aws:iam::400000000003:role/region-reader'] },
+      denyDetailsCallback: () => true
+    },
+    expected: { who: [] },
+    expectedDenyDetails: [
+      {
+        type: 'single',
+        principal: 'arn:aws:iam::400000000003:role/region-reader',
+        service: 'bedrock',
+        action: 'GetFoundationModel',
+        details: [
+          {
+            policyType: 'scp',
+            policyIdentifier:
+              'arn:aws:organizations::400000000001:policy/o-44444444/service_control_policy/p-region-deny',
+            statementId: 'DenyBlockedRegion',
+            statementIndex: 1,
+            blocking: true,
+            denialType: 'Explicit'
+          }
+        ]
+      }
+    ]
+  },
+  {
+    name: 'requested region: model outside denied region',
+    data: '3',
+    request: {
+      resource: 'arn:aws:bedrock:us-east-1::foundation-model/example.model-v1:0',
+      resourceAccount: '400000000003',
+      actions: ['bedrock:GetFoundationModel'],
+      principalScope: { principals: ['arn:aws:iam::400000000003:role/region-reader'] }
+    },
+    expected: {
+      who: [
+        {
+          principal: 'arn:aws:iam::400000000003:role/region-reader',
+          service: 'bedrock',
+          action: 'GetFoundationModel',
+          level: 'read',
+          resourceType: 'foundation-model'
+        }
+      ]
+    }
+  },
+  {
+    name: 'requested region: IfExists denies outside permitted region',
+    data: '3',
+    request: {
+      resource: 'arn:aws:bedrock:eu-west-2::foundation-model/example.model-v1:0',
+      resourceAccount: '400000000003',
+      actions: ['bedrock:InvokeModel'],
+      principalScope: { principals: ['arn:aws:iam::400000000003:role/region-reader'] },
+      denyDetailsCallback: () => true
+    },
+    expected: { who: [] },
+    expectedDenyDetails: [
+      {
+        type: 'single',
+        principal: 'arn:aws:iam::400000000003:role/region-reader',
+        service: 'bedrock',
+        action: 'InvokeModel',
+        details: [
+          {
+            policyType: 'scp',
+            policyIdentifier:
+              'arn:aws:organizations::400000000001:policy/o-44444444/service_control_policy/p-region-deny',
+            statementId: 'DenyOtherRegions',
+            statementIndex: 2,
+            blocking: true,
+            denialType: 'Explicit'
+          }
+        ]
+      }
+    ]
+  },
+  {
+    name: 'requested region: IfExists permits model in permitted region',
+    data: '3',
+    request: {
+      resource: 'arn:aws:bedrock:us-east-1::foundation-model/example.model-v1:0',
+      resourceAccount: '400000000003',
+      actions: ['bedrock:InvokeModel'],
+      principalScope: { principals: ['arn:aws:iam::400000000003:role/region-reader'] }
+    },
+    expected: {
+      who: [
+        {
+          principal: 'arn:aws:iam::400000000003:role/region-reader',
+          service: 'bedrock',
+          action: 'InvokeModel',
+          level: 'read',
+          resourceType: 'foundation-model'
+        }
+      ]
+    }
+  },
+  {
+    name: 'requested region: bucket in denied region',
+    data: '3',
+    request: {
+      resource: 'arn:aws:s3:::region-test-bucket',
+      resourceAccount: '400000000003',
+      actions: ['s3:ListBucket'],
+      principalScope: { principals: ['arn:aws:iam::400000000003:role/region-reader'] },
+      denyDetailsCallback: () => true
+    },
+    expected: { who: [] },
+    expectedDenyDetails: [
+      {
+        type: 'single',
+        principal: 'arn:aws:iam::400000000003:role/region-reader',
+        service: 's3',
+        action: 'ListBucket',
+        details: [
+          {
+            policyType: 'scp',
+            policyIdentifier:
+              'arn:aws:organizations::400000000001:policy/o-44444444/service_control_policy/p-region-deny',
+            statementId: 'DenyBlockedRegion',
+            statementIndex: 1,
+            blocking: true,
+            denialType: 'Explicit'
+          }
+        ]
+      }
+    ]
+  },
+  {
+    name: 'requested region: object in denied bucket',
+    data: '3',
+    request: {
+      resource: 'arn:aws:s3:::region-test-bucket/key',
+      resourceAccount: '400000000003',
+      actions: ['s3:GetObject'],
+      principalScope: { principals: ['arn:aws:iam::400000000003:role/region-reader'] },
+      denyDetailsCallback: () => true
+    },
+    expected: { who: [] },
+    expectedDenyDetails: [
+      {
+        type: 'single',
+        principal: 'arn:aws:iam::400000000003:role/region-reader',
+        service: 's3',
+        action: 'GetObject',
+        details: [
+          {
+            policyType: 'scp',
+            policyIdentifier:
+              'arn:aws:organizations::400000000001:policy/o-44444444/service_control_policy/p-region-deny',
+            statementId: 'DenyBlockedRegion',
+            statementIndex: 1,
+            blocking: true,
+            denialType: 'Explicit'
+          }
+        ]
+      }
+    ]
+  },
+  {
+    name: 'requested region: regionless model remains discoverable',
+    data: '3',
+    request: {
+      resource: 'arn:aws:bedrock:::foundation-model/example.model-v1:0',
+      resourceAccount: '400000000003',
+      actions: ['bedrock:GetFoundationModel'],
+      principalScope: { principals: ['arn:aws:iam::400000000003:role/region-reader'] }
+    },
+    expected: {
+      who: [
+        {
+          principal: 'arn:aws:iam::400000000003:role/region-reader',
+          service: 'bedrock',
+          action: 'GetFoundationModel',
+          level: 'read',
+          resourceType: 'foundation-model'
+        }
+      ]
+    }
+  },
+  {
+    name: 'requested region: unknown bucket region remains discoverable',
+    data: '3',
+    request: {
+      resource: 'arn:aws:s3:::unknown-region-test-bucket/key',
+      resourceAccount: '400000000003',
+      actions: ['s3:GetObject'],
+      principalScope: { principals: ['arn:aws:iam::400000000003:role/region-reader'] }
+    },
+    expected: {
+      who: [
+        {
+          principal: 'arn:aws:iam::400000000003:role/region-reader',
+          service: 's3',
+          action: 'GetObject',
+          level: 'read',
+          resourceType: 'object'
+        }
+      ]
+    }
+  },
+  {
+    name: 'requested region: regionless model retains IfExists SCP escape condition',
+    data: '3',
+    request: {
+      resource: 'arn:aws:bedrock:::foundation-model/example.model-v1:0',
+      resourceAccount: '400000000003',
+      actions: ['bedrock:InvokeModel'],
+      principalScope: { principals: ['arn:aws:iam::400000000003:role/region-reader'] }
+    },
+    expected: {
+      who: [
+        {
+          principal: 'arn:aws:iam::400000000003:role/region-reader',
+          service: 'bedrock',
+          action: 'InvokeModel',
+          level: 'read',
+          resourceType: 'foundation-model',
+          conditions: {
+            conditionType: 'condition',
+            op: 'StringEquals',
+            key: 'aws:RequestedRegion',
+            values: ['us-east-1'],
+            inverted: true,
+            sources: [
+              {
+                policyType: 'scp',
+                effect: 'Deny',
+                policyIdentifier:
+                  'arn:aws:organizations::400000000001:policy/o-44444444/service_control_policy/p-region-deny',
+                orgIdentifier: '400000000003',
+                statementId: 'DenyOtherRegions',
+                statementIndex: 2
+              }
+            ]
+          },
+          ignoredConditions: {
+            scp: {
+              deny: [
+                { op: 'StringNotEqualsIfExists', key: 'aws:RequestedRegion', values: ['us-east-1'] }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
     name: 'foundation model wildcard scoped to principals in two accounts',
     data: '1',
     request: {

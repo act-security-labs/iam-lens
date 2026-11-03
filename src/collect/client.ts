@@ -678,6 +678,29 @@ export class IamCollectClient {
   }
 
   /**
+   * Load the collected region for an S3 bucket or one of its objects.
+   *
+   * @param accountId the bucket owner's account
+   * @param bucketOrObjectArn bucket or object ARN
+   * @returns the stored bucket region, if available
+   */
+  async getRegionForBucket(
+    accountId: string,
+    bucketOrObjectArn: string
+  ): Promise<string | undefined> {
+    const bucketArn = bucketArnFromBucketOrObjectArn(bucketOrObjectArn)
+    return this.withCache(`bucketRegion:${accountId}:${bucketArn}`, async () => {
+      const metadata = await this.storageClient.getResourceMetadata<{ region?: string }, {}>(
+        accountId,
+        bucketArn,
+        'metadata',
+        {}
+      )
+      return metadata.region
+    })
+  }
+
+  /**
    * Check if ABAC is enabled for a specific S3 bucket
    *
    * @param accountId The account ID of the bucket

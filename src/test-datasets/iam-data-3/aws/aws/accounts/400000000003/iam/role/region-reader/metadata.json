@@ -1,0 +1,7 @@
+{
+  "arn": "arn:aws:iam::400000000003:role/region-reader",
+  "name": "region-reader",
+  "id": "AROAREGIONREADER",
+  "path": "/",
+  "created": "2024-01-01T00:00:00Z"
+}

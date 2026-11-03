@@ -1,0 +1,21 @@
+[
+  {
+    "PolicyName": "RegionReader",
+    "PolicyDocument": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "AllowReads",
+          "Effect": "Allow",
+          "Action": [
+            "bedrock:GetFoundationModel",
+            "bedrock:InvokeModel",
+            "s3:GetObject",
+            "s3:ListBucket"
+          ],
+          "Resource": "*"
+        }
+      ]
+    }
+  }
+]

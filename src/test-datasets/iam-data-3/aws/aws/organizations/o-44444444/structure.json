@@ -5,6 +5,9 @@
         "accounts": ["arn:aws:organizations::400000000001:account/o-44444444/400000000002"]
       }
     },
-    "accounts": ["arn:aws:organizations::400000000001:account/o-44444444/400000000001"]
+    "accounts": [
+      "arn:aws:organizations::400000000001:account/o-44444444/400000000001",
+      "arn:aws:organizations::400000000001:account/o-44444444/400000000003"
+    ]
   }
 }

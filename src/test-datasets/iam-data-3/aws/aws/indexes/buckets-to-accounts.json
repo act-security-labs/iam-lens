@@ -1,4 +1,6 @@
 {
+  "region-test-bucket": { "accountId": "400000000003", "region": "eu-west-2" },
+  "unknown-region-test-bucket": { "accountId": "400000000003" },
   "conditional-bucket": {
     "accountId": "600000000001",
     "region": "us-east-1"

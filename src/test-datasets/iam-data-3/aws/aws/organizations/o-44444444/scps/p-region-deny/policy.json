@@ -1,0 +1,19 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DenyBlockedRegion",
+      "Effect": "Deny",
+      "Action": ["bedrock:GetFoundationModel", "s3:GetObject", "s3:ListBucket"],
+      "Resource": "*",
+      "Condition": { "StringEquals": { "aws:RequestedRegion": "eu-west-2" } }
+    },
+    {
+      "Sid": "DenyOtherRegions",
+      "Effect": "Deny",
+      "Action": "bedrock:InvokeModel",
+      "Resource": "*",
+      "Condition": { "StringNotEqualsIfExists": { "aws:RequestedRegion": "us-east-1" } }
+    }
+  ]
+}
