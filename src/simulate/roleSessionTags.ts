@@ -4,6 +4,7 @@ import {
   type Statement,
   type ValidatedPolicy
 } from '@actsecurity/iam-policy'
+import { iamStringEquals, iamStringEqualsIgnoreCase } from '@actsecurity/iam-simulate'
 import { actionMatchesPattern, equalsIgnoreCase } from '@actsecurity/iam-utils'
 
 const tagSessionAction = 'sts:TagSession'
@@ -234,7 +235,9 @@ function entriesForCondition(condition: Condition): SessionTagKey[] {
  * @returns true when the key matches the entry
  */
 function tagKeyMatchesEntry(tagKey: string, entry: SessionTagKey): boolean {
-  return entry.ignoreCase ? equalsIgnoreCase(tagKey, entry.tagKey) : tagKey === entry.tagKey
+  return entry.ignoreCase
+    ? iamStringEqualsIgnoreCase(tagKey, entry.tagKey)
+    : iamStringEquals(tagKey, entry.tagKey)
 }
 
 /**
@@ -251,8 +254,8 @@ function uniqueTagKeys(entries: SessionTagKey[]): SessionTagKey[] {
         (existing) =>
           existing.ignoreCase === entry.ignoreCase &&
           (entry.ignoreCase
-            ? equalsIgnoreCase(existing.tagKey, entry.tagKey)
-            : existing.tagKey === entry.tagKey)
+            ? iamStringEqualsIgnoreCase(existing.tagKey, entry.tagKey)
+            : iamStringEquals(existing.tagKey, entry.tagKey))
       )
     ) {
       unique.push(entry)

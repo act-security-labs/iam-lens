@@ -260,6 +260,31 @@ const capabilityCases: CapabilityTestCase[] = [
 ]
 
 describe('roleSessionTagCapability', () => {
+  it('deduplicates IAM-equivalent tag values without merging distinct sigma values', () => {
+    //Given separate TagSession allows with case-insensitive tag values
+    const policy = trustPolicy([
+      statement({
+        Condition: { 'ForAllValues:StringEqualsIgnoreCase': { 'aws:TagKeys': ['İ', 'σ'] } }
+      }),
+      statement({
+        Condition: { 'ForAllValues:StringEqualsIgnoreCase': { 'aws:TagKeys': ['i\u0307', 'ς'] } }
+      })
+    ])
+
+    //When deriving the union of allowed tag values
+    const result = roleSessionTagCapability(policy)
+
+    //Then the expanded dotted-I values merge but the two sigma values remain separate
+    expect(result).toEqual({
+      type: 'allowlist',
+      tagKeys: [
+        { tagKey: 'İ', ignoreCase: true },
+        { tagKey: 'σ', ignoreCase: true },
+        { tagKey: 'ς', ignoreCase: true }
+      ]
+    })
+  })
+
   it.each(capabilityCases)('$name', ({ policy, expected, invalidPolicy }) => {
     //Given a validated trust policy representing the scenario
     if (invalidPolicy) {
@@ -336,6 +361,23 @@ const canSetTagKeyCases: CanSetTagKeyTestCase[] = [
 ]
 
 describe('roleSessionCanSetTagKey', () => {
+  it('uses IAM StringEqualsIgnoreCase value semantics for Unicode tag names', () => {
+    //Given an allowlist of literal policy values
+    const capability: RoleSessionTagCapability = {
+      type: 'allowlist',
+      tagKeys: [
+        { tagKey: 'İ', ignoreCase: true },
+        { tagKey: 'σ', ignoreCase: true }
+      ]
+    }
+
+    //When matching a lowercase expansion and an unrelated sigma variant
+    //Then IAM value equality applies rather than context-key equality
+    expect(roleSessionCanSetTagKey(capability, 'i\u0307')).toBe(true)
+    expect(roleSessionCanSetTagKey(capability, 'i')).toBe(false)
+    expect(roleSessionCanSetTagKey(capability, 'ς')).toBe(false)
+  })
+
   it.each(canSetTagKeyCases)('$name', ({ capability, tagKey, expected }) => {
     //Given trust-policy-derived capability and an arbitrary key independent of stored tags
     //When checking whether a session can set the key
@@ -391,6 +433,21 @@ const immutablePatternCases: ImmutablePatternTestCase[] = [
 ]
 
 describe('immutablePrincipalTagPattern', () => {
+  it('documents the regex limitation for an expanded lowercase tag name', () => {
+    //Given a policy whose case-insensitive tag value can expand during lowercasing
+    const capability: RoleSessionTagCapability = {
+      type: 'allowlist',
+      tagKeys: [{ tagKey: 'İ', ignoreCase: true }]
+    }
+
+    //When deriving the strict context key pattern
+    const pattern = immutablePrincipalTagPattern(capability)
+
+    //Then the regex cannot express the equivalent expanded IAM string value
+    expect(pattern).toBeDefined()
+    expect(compilePattern(pattern!).test('aws:PrincipalTag/i\u0307')).toBe(true)
+  })
+
   it.each(immutablePatternCases)(
     '$name',
     ({ capability, expectedPattern, strictKeys = [], mutableKeys = [] }) => {
