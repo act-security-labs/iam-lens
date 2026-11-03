@@ -261,6 +261,26 @@ export async function createContextKeys(
     }
   }
 
+  // The selected resource region is the modeled request region when it is known.
+  if (simulationRequest.resourceArn && simulationRequest.resourceArn.startsWith('arn:')) {
+    const resourceArn = simulationRequest.resourceArn
+    const arnRegion = splitArnParts(resourceArn).region
+    let region = arnRegion && !/[*?]/.test(arnRegion) ? arnRegion : undefined
+    if (
+      !region &&
+      isS3BucketOrObjectArn(resourceArn) &&
+      options.includeResourceMetadata !== false
+    ) {
+      region = await collectClient.getRegionForBucket(
+        simulationRequest.resourceAccount!,
+        resourceArn
+      )
+    }
+    if (region && !/[*?]/.test(region)) {
+      contextKeys['aws:RequestedRegion'] = region
+    }
+  }
+
   //Resource context keys
   if (actionSupportsAwsResourceInfoContextKeys(simulationRequest.action)) {
     contextKeys['aws:ResourceAccount'] = simulationRequest.resourceAccount!

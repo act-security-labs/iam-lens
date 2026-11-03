@@ -821,6 +821,9 @@ function makeGeneratedDiscoveryContextKeyNames(
   if (request.action.startsWith('s3:')) {
     generatedContextKeyNames.push('s3:DataAccessPointAccount', 's3:DataAccessPointArn')
   }
+  if (Object.keys(contextKeys).some((key) => equalsIgnoreCase(key, 'aws:RequestedRegion'))) {
+    generatedContextKeyNames.push('aws:RequestedRegion')
+  }
   generatedContextKeyNames.push(...Object.keys(request.customContextKeys))
 
   if (resourceTagsAreKnown) {

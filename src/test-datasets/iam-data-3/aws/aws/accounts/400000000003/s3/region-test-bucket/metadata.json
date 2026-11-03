@@ -1,0 +1,5 @@
+{
+  "name": "region-test-bucket",
+  "region": "eu-west-2",
+  "arn": "arn:aws:s3:::region-test-bucket"
+}

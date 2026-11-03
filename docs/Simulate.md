@@ -175,6 +175,9 @@ Context keys are automatically verified against the [Service Authorization Refer
 - **`aws:EpochTime`**
   Unix epoch time in seconds (e.g., `1717290896`).
 
+- **`aws:RequestedRegion`** _(when a resource region is known)_
+  The concrete region in the resource ARN, or for an S3 bucket or object, the bucket region from collected metadata. Discovery treats the value as known. If the region is absent or wildcarded, it remains unknown. This models the resource region as the request endpoint region; supply an explicit context override when the endpoint differs.
+
 #### IAM Principal Context
 
 - **`aws:PrincipalArn`**

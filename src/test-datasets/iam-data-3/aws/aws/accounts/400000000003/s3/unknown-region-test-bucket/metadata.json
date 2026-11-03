@@ -1,0 +1,4 @@
+{
+  "name": "unknown-region-test-bucket",
+  "arn": "arn:aws:s3:::unknown-region-test-bucket"
+}

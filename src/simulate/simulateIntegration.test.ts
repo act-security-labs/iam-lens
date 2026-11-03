@@ -31,6 +31,136 @@ const simulateIntegrationTest: {
   expectedPatterns?: { pattern: string; result: EvaluationResult }[]
 }[] = [
   {
+    name: 'requested region: regional model in denied region',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:bedrock:eu-west-2::foundation-model/example.model-v1:0',
+      resourceAccount: '400000000003',
+      action: 'bedrock:GetFoundationModel',
+      principal: 'arn:aws:iam::400000000003:role/region-reader',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ExplicitlyDenied'
+  },
+  {
+    name: 'requested region: regional model outside denied region',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:bedrock:us-east-1::foundation-model/example.model-v1:0',
+      resourceAccount: '400000000003',
+      action: 'bedrock:GetFoundationModel',
+      principal: 'arn:aws:iam::400000000003:role/region-reader',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed'
+  },
+  {
+    name: 'requested region: caller override takes precedence',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:bedrock:eu-west-2::foundation-model/example.model-v1:0',
+      resourceAccount: '400000000003',
+      action: 'bedrock:GetFoundationModel',
+      principal: 'arn:aws:iam::400000000003:role/region-reader',
+      customContextKeys: { 'aws:RequestedRegion': 'us-east-1' },
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed'
+  },
+  {
+    name: 'requested region: regionless model remains discoverable',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:bedrock:::foundation-model/example.model-v1:0',
+      resourceAccount: '400000000003',
+      action: 'bedrock:InvokeModel',
+      principal: 'arn:aws:iam::400000000003:role/region-reader',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed'
+  },
+  {
+    name: 'requested region: regionless model with StringEquals SCP remains discoverable',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:bedrock:::foundation-model/example.model-v1:0',
+      resourceAccount: '400000000003',
+      action: 'bedrock:GetFoundationModel',
+      principal: 'arn:aws:iam::400000000003:role/region-reader',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed'
+  },
+  {
+    name: 'requested region: IfExists SCP denies model outside permitted region',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:bedrock:eu-west-2::foundation-model/example.model-v1:0',
+      resourceAccount: '400000000003',
+      action: 'bedrock:InvokeModel',
+      principal: 'arn:aws:iam::400000000003:role/region-reader',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ExplicitlyDenied'
+  },
+  {
+    name: 'requested region: IfExists SCP allows model in permitted region',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:bedrock:us-east-1::foundation-model/example.model-v1:0',
+      resourceAccount: '400000000003',
+      action: 'bedrock:InvokeModel',
+      principal: 'arn:aws:iam::400000000003:role/region-reader',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed'
+  },
+  {
+    name: 'requested region: S3 bucket uses collected region',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:s3:::region-test-bucket',
+      resourceAccount: '400000000003',
+      action: 's3:ListBucket',
+      principal: 'arn:aws:iam::400000000003:role/region-reader',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ExplicitlyDenied'
+  },
+  {
+    name: 'requested region: S3 object uses collected bucket region',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:s3:::region-test-bucket/key',
+      resourceAccount: '400000000003',
+      action: 's3:GetObject',
+      principal: 'arn:aws:iam::400000000003:role/region-reader',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ExplicitlyDenied'
+  },
+  {
+    name: 'requested region: S3 object with unknown region remains discoverable',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:s3:::unknown-region-test-bucket/key',
+      resourceAccount: '400000000003',
+      action: 's3:GetObject',
+      principal: 'arn:aws:iam::400000000003:role/region-reader',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed'
+  },
+  {
     name: 'regionless foundation model wildcard supports identity authorization',
     data: '1',
     request: {
