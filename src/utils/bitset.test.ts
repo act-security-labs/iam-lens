@@ -121,6 +121,41 @@ describe('decodeBitSet', () => {
     expect(decoded.get(43)).toBe(0)
   })
 
+  it.each([
+    [0, 0],
+    [30, 30],
+    [30, 31],
+    [31, 31],
+    [31, 32],
+    [32, 32],
+    [0, 30],
+    [0, 31],
+    [0, 32],
+    [0, 62],
+    [0, 63],
+    [30, 63],
+    [31, 63],
+    [32, 63],
+    [62, 62],
+    [62, 63],
+    [63, 63],
+    [63, 64],
+    [64, 64],
+    [0, 64],
+    [0, 95],
+    [95, 95]
+  ])('decodes the inclusive range %i to %i exactly', (start, end) => {
+    //Given an encoded range near a 32-bit word boundary
+    const encoded = [start, end]
+    const expected = Array.from({ length: end - start + 1 }, (_, index) => start + index)
+
+    //When decoding the range
+    const decoded = decodeBitSet(encoded)
+
+    //Then only the inclusive range is set
+    expect(decoded.toArray()).toEqual(expected)
+  })
+
   it('should decode array with large range correctly', () => {
     //Given an array with a large range
     const largeRangeArray = [100, 200]

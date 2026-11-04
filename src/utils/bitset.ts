@@ -36,7 +36,16 @@ export function encodeBitSet(bitset: BitSetInstance): any {
 export function decodeBitSet(encoded: any): BitSetInstance {
   if (Array.isArray(encoded)) {
     const bitset = new BitSet()
-    bitset.setRange(encoded[0], encoded[1], 1)
+    const [start, end] = encoded
+    if (end % 32 === 31) {
+      // BitSet 5.3.0 drops the last word at this boundary: https://github.com/rawify/BitSet.js/pull/50
+      if (start < end) {
+        bitset.setRange(start, end - 1, 1)
+      }
+      bitset.set(end, 1)
+    } else {
+      bitset.setRange(start, end, 1)
+    }
     return bitset
   } else if (typeof encoded === 'string') {
     // Check if it's a sparse array (comma-separated numbers)
