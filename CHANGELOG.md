@@ -1,3 +1,10 @@
+## [0.1.193](https://github.com/act-security-labs/iam-lens/compare/v0.1.192...v0.1.193) (2026-11-04)
+
+
+### Bug Fixes
+
+* preserve empty principal index ranges ([#248](https://github.com/act-security-labs/iam-lens/issues/248)) ([88a15b7](https://github.com/act-security-labs/iam-lens/commit/88a15b76e09f90e02dd5d75ad56a8797cbdacbb5))
+
 ## [0.1.192](https://github.com/act-security-labs/iam-lens/compare/v0.1.191...v0.1.192) (2026-11-04)
 
 
