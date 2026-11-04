@@ -1160,6 +1160,20 @@ describe('IamCollectClient', () => {
   })
 
   describe('getAbacEnabledForBucket', () => {
+    it('reports invalid null bucket metadata rather than an incidental TypeError', async () => {
+      //Given a bucket whose stored metadata is JSON null
+      const { store, client } = testStore()
+      const accountId = '123456789012'
+      const bucketArn = 'arn:aws:s3:::example-bucket'
+      await store.saveResourceMetadata(accountId, bucketArn, 'metadata', 'null')
+
+      //When checking ABAC
+      const result = client.getAbacEnabledForBucket(accountId, bucketArn)
+
+      //Then the failure identifies the invalid metadata
+      await expect(result).rejects.toThrow(/invalid.*metadata/i)
+    })
+
     it('should return true if ABAC is enabled for the bucket', async () => {
       // Given a bucket with ABAC enabled
       const { store, client } = testStore()
@@ -1277,6 +1291,51 @@ describe('IamCollectClient', () => {
   })
 
   describe('getBlockPublicAccessEnabledForBucket', () => {
+    it('reports invalid null bucket BPA metadata', async () => {
+      //Given JSON null bucket BPA metadata and no account BPA metadata
+      const { store, client } = testStore()
+      const accountId = '123456789012'
+      const bucketArn = 'arn:aws:s3:::example-bucket'
+      await store.saveResourceMetadata(accountId, bucketArn, 'bpa', 'null')
+
+      //When checking effective BPA
+      const result = client.getBlockPublicAccessEnabledForBucket(accountId, bucketArn)
+
+      //Then the failure identifies invalid metadata
+      await expect(result).rejects.toThrow(/invalid.*bpa/i)
+    })
+
+    it('reports invalid null account BPA metadata', async () => {
+      //Given JSON null account BPA metadata and no bucket BPA metadata
+      const { store, client } = testStore()
+      const accountId = '123456789012'
+      const bucketArn = 'arn:aws:s3:::example-bucket'
+      await store.saveAccountMetadata(accountId, 's3-bpa', 'null')
+
+      //When checking effective BPA
+      const result = client.getBlockPublicAccessEnabledForBucket(accountId, bucketArn)
+
+      //Then the failure identifies invalid metadata
+      await expect(result).rejects.toThrow(/invalid.*bpa/i)
+    })
+
+    it('reports invalid account BPA even when bucket BPA is enabled', async () => {
+      //Given enabled bucket BPA and JSON null account BPA metadata
+      const { store, client } = testStore()
+      const accountId = '123456789012'
+      const bucketArn = 'arn:aws:s3:::example-bucket'
+      await store.saveResourceMetadata(accountId, bucketArn, 'bpa', {
+        RestrictPublicBuckets: true
+      })
+      await store.saveAccountMetadata(accountId, 's3-bpa', 'null')
+
+      //When checking effective BPA
+      const result = client.getBlockPublicAccessEnabledForBucket(accountId, bucketArn)
+
+      //Then invalid account metadata is not silently masked
+      await expect(result).rejects.toThrow(/invalid.*bpa/i)
+    })
+
     it('should return true if RestrictPublicBuckets is enabled for the bucket', async () => {
       // Given a bucket with bucket-level Block Public Access enabled
       const { store, client } = testStore()
