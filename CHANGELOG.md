@@ -1,3 +1,10 @@
+## [0.1.190](https://github.com/act-security-labs/iam-lens/compare/v0.1.189...v0.1.190) (2026-11-04)
+
+
+### Bug Fixes
+
+* handle null bucket region metadata ([#245](https://github.com/act-security-labs/iam-lens/issues/245)) ([cb56335](https://github.com/act-security-labs/iam-lens/commit/cb5633556d6052d0d8f400640742645a4bc609db))
+
 ## [0.1.189](https://github.com/act-security-labs/iam-lens/compare/v0.1.188...v0.1.189) (2026-11-03)
 
 
