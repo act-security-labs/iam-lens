@@ -1,3 +1,10 @@
+## [0.1.191](https://github.com/act-security-labs/iam-lens/compare/v0.1.190...v0.1.191) (2026-11-04)
+
+
+### Bug Fixes
+
+* default null S3 security metadata ([#246](https://github.com/act-security-labs/iam-lens/issues/246)) ([2d50363](https://github.com/act-security-labs/iam-lens/commit/2d50363c852ed02e1e413ca083c3ef68a9e1be1f))
+
 ## [0.1.190](https://github.com/act-security-labs/iam-lens/compare/v0.1.189...v0.1.190) (2026-11-04)
 
 
