@@ -15,6 +15,53 @@ import {
 } from './simulate.js'
 
 describe('simulateRequest', () => {
+  it.each(['metadata', 'bpa', 's3-bpa'] as const)(
+    'simulates an S3 request with JSON null %s metadata',
+    async (metadataKind) => {
+      //Given a role allowed to read an object and one null S3 metadata source
+      const { store, client } = testStore()
+      const accountId = '123456789012'
+      const bucketArn = 'arn:aws:s3:::example-bucket'
+      const principal = `arn:aws:iam::${accountId}:role/ExampleRole`
+      await saveRole(store, {
+        arn: principal,
+        inlinePolicies: [
+          {
+            PolicyName: 'ReadObject',
+            PolicyDocument: {
+              Version: '2012-10-17',
+              Statement: { Effect: 'Allow', Action: 's3:GetObject', Resource: `${bucketArn}/*` }
+            }
+          }
+        ]
+      })
+      if (metadataKind === 's3-bpa') {
+        await store.saveAccountMetadata(accountId, metadataKind, 'null')
+      } else {
+        await store.saveResourceMetadata(accountId, bucketArn, metadataKind, 'null')
+      }
+      // The separate RD-13875 region fix is not yet on main; isolate security settings here.
+      vi.spyOn(client, 'getRegionForBucket').mockResolvedValue(undefined)
+
+      //When simulating a normal S3 request without an ABAC override
+      const { result } = await simulateRequest(
+        {
+          simulationMode: 'Strict',
+          principal,
+          resourceArn: `${bucketArn}/example.txt`,
+          resourceAccount: accountId,
+          action: 's3:GetObject',
+          customContextKeys: {}
+        },
+        client
+      )
+
+      //Then the missing security settings do not prevent the known grant
+      expect(result.resultType).toBe('single')
+      expect(result.overallResult).toBe('Allowed')
+    }
+  )
+
   it('should omit RCPs when a service principal assumes a service-linked role', async () => {
     //Given a service principal, a service-linked target role, and an RCP on the target account
     const { store, client } = testStore()
