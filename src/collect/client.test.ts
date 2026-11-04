@@ -1160,6 +1160,20 @@ describe('IamCollectClient', () => {
   })
 
   describe('getAbacEnabledForBucket', () => {
+    it('defaults ABAC to false for JSON null bucket metadata', async () => {
+      //Given a bucket whose stored metadata is JSON null
+      const { store, client } = testStore()
+      const accountId = '123456789012'
+      const bucketArn = 'arn:aws:s3:::example-bucket'
+      await store.saveResourceMetadata(accountId, bucketArn, 'metadata', 'null')
+
+      //When checking ABAC
+      const result = client.getAbacEnabledForBucket(accountId, bucketArn)
+
+      //Then null uses the missing-metadata default
+      await expect(result).resolves.toBe(false)
+    })
+
     it('should return true if ABAC is enabled for the bucket', async () => {
       // Given a bucket with ABAC enabled
       const { store, client } = testStore()
@@ -1277,6 +1291,66 @@ describe('IamCollectClient', () => {
   })
 
   describe('getBlockPublicAccessEnabledForBucket', () => {
+    it('defaults to false for JSON null bucket BPA metadata', async () => {
+      //Given JSON null bucket BPA metadata and no account BPA metadata
+      const { store, client } = testStore()
+      const accountId = '123456789012'
+      const bucketArn = 'arn:aws:s3:::example-bucket'
+      await store.saveResourceMetadata(accountId, bucketArn, 'bpa', 'null')
+
+      //When checking effective BPA
+      const result = client.getBlockPublicAccessEnabledForBucket(accountId, bucketArn)
+
+      //Then null uses the missing-metadata default
+      await expect(result).resolves.toBe(false)
+    })
+
+    it('defaults to false for JSON null account BPA metadata', async () => {
+      //Given JSON null account BPA metadata and no bucket BPA metadata
+      const { store, client } = testStore()
+      const accountId = '123456789012'
+      const bucketArn = 'arn:aws:s3:::example-bucket'
+      await store.saveAccountMetadata(accountId, 's3-bpa', 'null')
+
+      //When checking effective BPA
+      const result = client.getBlockPublicAccessEnabledForBucket(accountId, bucketArn)
+
+      //Then null uses the missing-metadata default
+      await expect(result).resolves.toBe(false)
+    })
+
+    it('preserves enabled bucket BPA when account BPA is JSON null', async () => {
+      //Given enabled bucket BPA and JSON null account BPA metadata
+      const { store, client } = testStore()
+      const accountId = '123456789012'
+      const bucketArn = 'arn:aws:s3:::example-bucket'
+      await store.saveResourceMetadata(accountId, bucketArn, 'bpa', {
+        RestrictPublicBuckets: true
+      })
+      await store.saveAccountMetadata(accountId, 's3-bpa', 'null')
+
+      //When checking effective BPA
+      const result = client.getBlockPublicAccessEnabledForBucket(accountId, bucketArn)
+
+      //Then the known enabled bucket setting still applies
+      await expect(result).resolves.toBe(true)
+    })
+
+    it('preserves enabled account BPA when bucket BPA is JSON null', async () => {
+      //Given JSON null bucket BPA and enabled account BPA
+      const { store, client } = testStore()
+      const accountId = '123456789012'
+      const bucketArn = 'arn:aws:s3:::example-bucket'
+      await store.saveResourceMetadata(accountId, bucketArn, 'bpa', 'null')
+      await store.saveAccountMetadata(accountId, 's3-bpa', { RestrictPublicBuckets: true })
+
+      //When checking effective BPA
+      const result = client.getBlockPublicAccessEnabledForBucket(accountId, bucketArn)
+
+      //Then the known enabled account setting still applies
+      await expect(result).resolves.toBe(true)
+    })
+
     it('should return true if RestrictPublicBuckets is enabled for the bucket', async () => {
       // Given a bucket with bucket-level Block Public Access enabled
       const { store, client } = testStore()

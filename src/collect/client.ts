@@ -705,18 +705,18 @@ export class IamCollectClient {
    *
    * @param accountId The account ID of the bucket
    * @param bucketOrObjectArn The ARN of the bucket or object
-   * @returns true if ABAC is enabled for the bucket, false otherwise
+   * @returns true if ABAC is enabled for the bucket, or false when disabled or metadata is missing or null
    */
 
   async getAbacEnabledForBucket(accountId: string, bucketOrObjectArn: string): Promise<boolean> {
     const bucketArn = bucketArnFromBucketOrObjectArn(bucketOrObjectArn)
     return this.withCache(`abacEnabledForBucket:${bucketArn}`, async () => {
       const bucketMetadata = await this.storageClient.getResourceMetadata<
-        { abacEnabled?: boolean },
+        { abacEnabled?: boolean } | null,
         {}
       >(accountId, bucketArn, 'metadata', {})
 
-      return !!bucketMetadata.abacEnabled
+      return !!bucketMetadata?.abacEnabled
     })
   }
 
@@ -724,6 +724,7 @@ export class IamCollectClient {
    * Check if S3 Block Public Access RestrictPublicBuckets is enabled for a specific S3 bucket.
    * Bucket-level and account-level settings both apply, so the effective setting is enabled
    * when either collected metadata source has RestrictPublicBuckets set to true.
+   * Missing or null metadata defaults to false for that source.
    *
    * @param accountId The account ID of the bucket
    * @param bucketOrObjectArn The ARN of the bucket or object
@@ -736,20 +737,20 @@ export class IamCollectClient {
     const bucketArn = bucketArnFromBucketOrObjectArn(bucketOrObjectArn)
     return this.withCache(`bpaEnabledForBucket:${accountId}:${bucketArn}`, async () => {
       const [bucketBpa, accountBpa] = await Promise.all([
-        this.storageClient.getResourceMetadata<S3PublicAccessBlockMetadata, {}>(
+        this.storageClient.getResourceMetadata<S3PublicAccessBlockMetadata | null, {}>(
           accountId,
           bucketArn,
           'bpa',
           {}
         ),
-        this.storageClient.getAccountMetadata<S3PublicAccessBlockMetadata, {}>(
+        this.storageClient.getAccountMetadata<S3PublicAccessBlockMetadata | null, {}>(
           accountId,
           's3-bpa',
           {}
         )
       ])
 
-      return bucketBpa.RestrictPublicBuckets === true || accountBpa.RestrictPublicBuckets === true
+      return bucketBpa?.RestrictPublicBuckets === true || accountBpa?.RestrictPublicBuckets === true
     })
   }
 
