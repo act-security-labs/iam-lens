@@ -2872,6 +2872,45 @@ describe('IamCollectClient', () => {
       expect(result).toBeUndefined()
     })
 
+    it('does not return a preceding account principal for an empty account range', async () => {
+      //Given an empty account immediately after 32 principals from another account
+      const { client } = testStore()
+      const populatedAccount = '111111111111'
+      const emptyAccount = '222222222222'
+      const principals = Array.from(
+        { length: 32 },
+        (_, index) => `${populatedAccount}:u/user-${index}`
+      )
+      await client.savePrincipalIndex('principals', { principals, prefix: 'arn:aws:iam::' })
+      await client.savePrincipalIndex('accounts', {
+        [populatedAccount]: [0, 31],
+        [emptyAccount]: [32, 31]
+      })
+      await client.savePrincipalIndex('actions-s3', { getobject: ',31' })
+
+      //When querying the populated account and both empty-account lookup paths
+      const matching = await client.getPrincipalsWithActionAllowed(
+        undefined,
+        [populatedAccount],
+        's3:GetObject'
+      )
+      const filteredEmpty = await client.getPrincipalsWithActionAllowed(
+        undefined,
+        [emptyAccount],
+        's3:GetObject'
+      )
+      const allFromEmpty = await client.getPrincipalsWithActionAllowed(
+        emptyAccount,
+        [],
+        's3:PutObject'
+      )
+
+      //Then the previous account's principal is returned only for its own account
+      expect(matching).toEqual([`arn:aws:iam::${populatedAccount}:user/user-31`])
+      expect.soft(filteredEmpty).toEqual([])
+      expect.soft(allFromEmpty).toEqual([])
+    })
+
     it('should return principals with wildcard actions', async () => {
       // Given a store with principals and a built index
       const { store, client } = testStore()

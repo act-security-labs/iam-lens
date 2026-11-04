@@ -42,7 +42,9 @@ export function decodeBitSet(encoded: any): BitSetInstance {
       if (start < end) {
         bitset.setRange(start, end - 1, 1)
       }
-      bitset.set(end, 1)
+      if (start <= end) {
+        bitset.set(end, 1)
+      }
     } else {
       bitset.setRange(start, end, 1)
     }

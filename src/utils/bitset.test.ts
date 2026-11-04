@@ -156,6 +156,23 @@ describe('decodeBitSet', () => {
     expect(decoded.toArray()).toEqual(expected)
   })
 
+  it.each([
+    [0, -1],
+    [1, 0],
+    [32, 31],
+    [64, 63],
+    [96, 95]
+  ])('decodes empty range %i to %i without setting any bits', (start, end) => {
+    //Given an empty encoded account range
+    const encoded = [start, end]
+
+    //When decoding the range
+    const decoded = decodeBitSet(encoded)
+
+    //Then no principal positions are selected
+    expect(decoded.toArray()).toEqual([])
+  })
+
   it('should decode array with large range correctly', () => {
     //Given an array with a large range
     const largeRangeArray = [100, 200]
