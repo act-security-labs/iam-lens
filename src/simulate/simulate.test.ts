@@ -40,9 +40,6 @@ describe('simulateRequest', () => {
       } else {
         await store.saveResourceMetadata(accountId, bucketArn, metadataKind, 'null')
       }
-      // The separate RD-13875 region fix is not yet on main; isolate security settings here.
-      vi.spyOn(client, 'getRegionForBucket').mockResolvedValue(undefined)
-
       //When simulating a normal S3 request without an ABAC override
       const { result } = await simulateRequest(
         {
