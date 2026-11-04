@@ -1,3 +1,10 @@
+## [0.1.192](https://github.com/act-security-labs/iam-lens/compare/v0.1.191...v0.1.192) (2026-11-04)
+
+
+### Bug Fixes
+
+* handle BitSet range boundary decoding ([#247](https://github.com/act-security-labs/iam-lens/issues/247)) ([971c7c0](https://github.com/act-security-labs/iam-lens/commit/971c7c03b8ee783b8d3c71fccff7ae8e57f0372b))
+
 ## [0.1.191](https://github.com/act-security-labs/iam-lens/compare/v0.1.190...v0.1.191) (2026-11-04)
 
 
