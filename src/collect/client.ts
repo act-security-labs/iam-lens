@@ -509,7 +509,9 @@ export class IamCollectClient {
       const policies: OrgPolicy[] = []
       for (const policyArn of policyArns) {
         const policyInfo = await this.getOrgPolicy(orgId, policyType, policyArn)
-        policies.push(policyInfo)
+        if (policyInfo !== undefined) {
+          policies.push(policyInfo)
+        }
       }
 
       return policies
@@ -545,36 +547,41 @@ export class IamCollectClient {
    * @param orgId The ID of the organization.
    * @param policyType The type of policy ('scps' or 'rcps').
    * @param policyArn The ARN of the policy.
-   * @returns The org policy.
+   * @returns The org policy with validation errors, or undefined if metadata or document is absent.
    */
   async getOrgPolicy(
     orgId: string,
     policyType: OrgPolicyType,
     policyArn: string
-  ): Promise<OrgPolicy> {
+  ): Promise<OrgPolicy | undefined> {
     const cacheKey = `orgPolicy:${orgId}:${policyType}:${policyArn}`
     return this.withCache(cacheKey, async () => {
       const policyId = policyArn.split('/').at(-1)!
       const policyData = await this.storageClient.getOrganizationPolicyMetadata<
-        StoredOrgPolicyMetadata,
-        StoredOrgPolicyMetadata
+        StoredOrgPolicyMetadata | undefined,
+        undefined
       >(orgId, policyType, policyId, 'metadata')
-      const policyDocument = await this.storageClient.getOrganizationPolicyMetadata(
-        orgId,
-        policyType,
-        policyId,
-        'policy'
-      )
-      if (!policyDocument) {
+      const policyDocument = await this.storageClient.getOrganizationPolicyMetadata<
+        unknown,
+        undefined
+      >(orgId, policyType, policyId, 'policy')
+      if (policyDocument === undefined) {
         log.warn(`Policy document not found for ${policyArn} in org ${orgId}`)
+        return undefined
       }
 
+      if (policyData == null) {
+        log.warn(`Policy metadata not found for ${policyArn} in org ${orgId}`)
+        return undefined
+      }
+
+      const arn = policyData.arn
       const validateFn =
         policyType === 'scps' ? validateServiceControlPolicy : validateResourceControlPolicy
       return {
-        arn: policyData.arn,
+        arn,
         name: policyData.name,
-        policy: createValidatedPolicy(policyDocument, validateFn, { name: policyData.arn })
+        policy: createValidatedPolicy(policyDocument, validateFn, { name: arn })
       }
     })
   }
@@ -627,7 +634,9 @@ export class IamCollectClient {
       const policies: OrgPolicy[] = []
       for (const policyArn of orgPolicies) {
         const policyInfo = await this.getOrgPolicy(orgId, policyType, policyArn)
-        policies.push(policyInfo)
+        if (policyInfo !== undefined) {
+          policies.push(policyInfo)
+        }
       }
 
       return policies
@@ -784,27 +793,41 @@ export class IamCollectClient {
       const results: ManagedPolicy[] = []
 
       for (const policyArn of managedPolicies) {
-        results.push(await this.getManagedPolicy(accountId, policyArn))
+        const policy = await this.getManagedPolicy(accountId, policyArn)
+        if (policy !== undefined) {
+          results.push(policy)
+        }
       }
 
       return results
     })
   }
 
-  async getManagedPolicy(accountId: string, policyArn: string): Promise<ManagedPolicy> {
+  /**
+   * Gets a specific managed policy.
+   * @param accountId The ID of the account.
+   * @param policyArn The ARN of the policy.
+   * @returns The managed policy with validation errors, or undefined if metadata or document is absent.
+   */
+  async getManagedPolicy(accountId: string, policyArn: string): Promise<ManagedPolicy | undefined> {
     const cacheKey = `managedPolicy:${accountId}:${policyArn}`
     return this.withCache(cacheKey, async () => {
       const policyMetadata = await this.storageClient.getResourceMetadata<
-        ManagedPolicyMetadata,
-        ManagedPolicyMetadata
+        ManagedPolicyMetadata | undefined,
+        undefined
       >(accountId, policyArn, 'metadata')
-      const policyDocument = await this.storageClient.getResourceMetadata(
+      const policyDocument = await this.storageClient.getResourceMetadata<unknown, undefined>(
         accountId,
         policyArn,
         'current-policy'
       )
-      if (!policyDocument) {
+      if (policyDocument === undefined) {
         log.warn(`Policy document not found for ${policyArn} in account ${accountId}`)
+        return undefined
+      }
+      if (policyMetadata == null) {
+        log.warn(`Policy metadata not found for ${policyArn} in account ${accountId}`)
+        return undefined
       }
       return {
         arn: policyMetadata.arn,
@@ -862,7 +885,7 @@ export class IamCollectClient {
    * Gets the permissions boundary policy attached to a user, if any.
    *
    * @param userArn The ARN of the user.
-   * @returns The permissions boundary policy as an OrgPolicy, or undefined if none is set.
+   * @returns The permissions boundary policy, or undefined if none is set or its metadata or document is absent.
    */
   async getPermissionsBoundaryForUser(userArn: string): Promise<ManagedPolicy | undefined> {
     const cacheKey = `userPermissionBoundary:${userArn}`
@@ -922,7 +945,10 @@ export class IamCollectClient {
       const results: ManagedPolicy[] = []
 
       for (const policyArn of managedPolicies) {
-        results.push(await this.getManagedPolicy(accountId, policyArn))
+        const policy = await this.getManagedPolicy(accountId, policyArn)
+        if (policy !== undefined) {
+          results.push(policy)
+        }
       }
 
       return results
@@ -972,7 +998,10 @@ export class IamCollectClient {
       const results: ManagedPolicy[] = []
 
       for (const policyArn of managedPolicies) {
-        results.push(await this.getManagedPolicy(accountId, policyArn))
+        const policy = await this.getManagedPolicy(accountId, policyArn)
+        if (policy !== undefined) {
+          results.push(policy)
+        }
       }
 
       return results
@@ -1006,7 +1035,7 @@ export class IamCollectClient {
   /**
    * Get the permissions boundary policy attached to a role, if any.
    * @param roleArn the ARN of the role.
-   * @returns the permissions boundary policy as a ManagedPolicy, or undefined if none is set.
+   * @returns the permissions boundary policy, or undefined if none is set or its metadata or document is absent.
    */
   async getPermissionsBoundaryForRole(roleArn: string): Promise<ManagedPolicy | undefined> {
     const cacheKey = `permissionBoundaryForRole:${roleArn}`

@@ -1,0 +1,5 @@
+{
+  "arn": "arn:aws:iam::900000000002:role/invalidscp",
+  "name": "invalidscp",
+  "path": "/"
+}

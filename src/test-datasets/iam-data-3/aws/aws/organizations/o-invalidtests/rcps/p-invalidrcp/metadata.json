@@ -1,0 +1,4 @@
+{
+  "arn": "arn:aws:organizations::900000000000:policy/o-invalidtests/resource_control_policy/p-invalidrcp",
+  "name": "p-invalidrcp"
+}

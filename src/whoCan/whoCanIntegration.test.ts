@@ -134,6 +134,27 @@ interface WhoCanIntegrationTest {
 
 const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
   {
+    name: 'valid principal despite unrelated invalid policy data',
+    data: '3',
+    request: {
+      resource: 'arn:aws:ec2:us-east-1:900000000001:instance/i-1234567890abcdef0',
+      resourceAccount: '900000000001',
+      actions: ['ec2:TerminateInstances'],
+      principalScope: { principals: ['arn:aws:iam::900000000001:role/valid'] }
+    },
+    expected: {
+      who: [
+        {
+          principal: 'arn:aws:iam::900000000001:role/valid',
+          service: 'ec2',
+          action: 'TerminateInstances',
+          level: 'write',
+          resourceType: 'instance'
+        }
+      ]
+    }
+  },
+  {
     name: 'requested region: model in denied region',
     data: '3',
     request: {
@@ -4624,6 +4645,34 @@ const processorTuningConfigs = [
 ]
 
 describe('whoCan Integration Tests', () => {
+  it.each([
+    ['900000000001', 'invalididentity', 0],
+    ['900000000001', 'invalididentity', 1],
+    ['900000000001', 'invalidboundary', 0],
+    ['900000000001', 'invalidboundary', 1],
+    ['900000000002', 'invalidscp', 0],
+    ['900000000002', 'invalidscp', 1],
+    ['900000000003', 'invalidrcp', 0],
+    ['900000000003', 'invalidrcp', 1]
+  ])(
+    'rejects a whoCan request with an invalid policy for %s role %s with %s workers',
+    async (account, role, workerThreads) => {
+      //Given a principal whose applicable collected policy document is invalid
+      //When whoCan evaluates the principal
+      //Then it reports a simulation failure rather than partial success
+      await expect(
+        whoCan(getTestDatasetConfigs('3'), 'aws', {
+          resource: `arn:aws:ec2:us-east-1:${account}:instance/i-1234567890abcdef0`,
+          resourceAccount: account,
+          actions: ['ec2:TerminateInstances'],
+          principalScope: { principals: [`arn:aws:iam::${account}:role/${role}`] },
+          workerThreads,
+          ignorePrincipalIndex: true
+        })
+      ).rejects.toThrow('simulation errors')
+    }
+  )
+
   for (const withIndex of [false, true]) {
     describe('running tests in parallel', () => {
       const uniqueDatasetIds = new Set(whoCanIntegrationTests.map((test) => test.data))
