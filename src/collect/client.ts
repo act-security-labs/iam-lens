@@ -580,6 +580,53 @@ export class IamCollectClient {
   }
 
   /**
+   * Finds a stored org policy.
+   * @param orgId The ID of the organization.
+   * @param policyType The type of policy ('scps' or 'rcps').
+   * @param policyArn The ARN of the policy.
+   * @returns The org policy with validation errors, or undefined if its document is absent.
+   */
+  async findOrgPolicy(
+    orgId: string,
+    policyType: OrgPolicyType,
+    policyArn: string
+  ): Promise<OrgPolicy | undefined> {
+    const cacheKey = `findOrgPolicy:${orgId}:${policyType}:${policyArn}`
+    return this.withCache(cacheKey, async () => {
+      const policyId = policyArn.split('/').at(-1)!
+      const policyData = await this.storageClient.getOrganizationPolicyMetadata<
+        StoredOrgPolicyMetadata | undefined,
+        undefined
+      >(orgId, policyType, policyId, 'metadata')
+      const policyDocument = await this.storageClient.getOrganizationPolicyMetadata<
+        unknown,
+        undefined
+      >(orgId, policyType, policyId, 'policy')
+      if (policyDocument === undefined) {
+        return undefined
+      }
+
+      return this.buildOrgPolicy(policyType, policyArn, policyData, policyDocument)
+    })
+  }
+
+  private buildOrgPolicy(
+    policyType: OrgPolicyType,
+    policyArn: string,
+    policyData: StoredOrgPolicyMetadata | undefined,
+    policyDocument: unknown
+  ): OrgPolicy {
+    const metadata = policyData ?? { arn: policyArn, name: policyArn }
+    const validateFn =
+      policyType === 'scps' ? validateServiceControlPolicy : validateResourceControlPolicy
+    return {
+      arn: metadata.arn,
+      name: metadata.name,
+      policy: createValidatedPolicy(policyDocument, validateFn, { name: metadata.arn })
+    }
+  }
+
+  /**
    * Gets the RCPs for an account.
    * @param accountId The ID of the account.
    * @returns The RCPs for the account.
@@ -814,6 +861,50 @@ export class IamCollectClient {
         })
       }
     })
+  }
+
+  /**
+   * Finds a stored managed policy.
+   * @param accountId The ID of the account.
+   * @param policyArn The ARN of the policy.
+   * @returns The managed policy with validation errors, or undefined if its document is absent.
+   */
+  async findManagedPolicy(
+    accountId: string,
+    policyArn: string
+  ): Promise<ManagedPolicy | undefined> {
+    const cacheKey = `findManagedPolicy:${accountId}:${policyArn}`
+    return this.withCache(cacheKey, async () => {
+      const policyMetadata = await this.storageClient.getResourceMetadata<
+        ManagedPolicyMetadata | undefined,
+        undefined
+      >(accountId, policyArn, 'metadata')
+      const policyDocument = await this.storageClient.getResourceMetadata<unknown, undefined>(
+        accountId,
+        policyArn,
+        'current-policy'
+      )
+      if (policyDocument === undefined) {
+        return undefined
+      }
+
+      return this.buildManagedPolicy(policyArn, policyMetadata, policyDocument)
+    })
+  }
+
+  private buildManagedPolicy(
+    policyArn: string,
+    policyMetadata: ManagedPolicyMetadata | undefined,
+    policyDocument: unknown
+  ): ManagedPolicy {
+    const metadata = policyMetadata ?? { arn: policyArn, name: policyArn }
+    return {
+      arn: metadata.arn,
+      name: metadata.name,
+      policy: createValidatedPolicy(policyDocument, validateIdentityPolicy, {
+        name: policyArn
+      })
+    }
   }
 
   /**

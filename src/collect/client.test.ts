@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { makePrincipalIndex } from '../principalIndex/makePrincipalIndex.js'
 import { saveGroup, saveManagedPolicy, saveRole, saveUser } from '../utils/testUtils.js'
+import { IamCollectClient } from './client.js'
 import { testStore } from './inMemoryClient.js'
 
 const fullAccessPolicy = {
@@ -19,6 +20,18 @@ const s3Scp = {
   Statement: [
     {
       Effect: 'Allow',
+      Action: 's3:*',
+      Resource: '*'
+    }
+  ]
+}
+
+const s3Rcp = {
+  Version: '2012-10-17',
+  Statement: [
+    {
+      Effect: 'Deny',
+      Principal: '*',
       Action: 's3:*',
       Resource: '*'
     }
@@ -1865,6 +1878,151 @@ describe('IamCollectClient', () => {
           errors: []
         }
       })
+    })
+  })
+
+  describe('absence-aware policy lookups', () => {
+    const accountId = '123456789012'
+    const managedArn = `arn:aws:iam::${accountId}:policy/Policy1`
+    const orgId = 'o-12345678'
+    const policyId = 'p-12345678'
+    const orgArn = `arn:aws:organizations::${accountId}:policy/${orgId}/${policyId}`
+
+    describe('findManagedPolicy', () => {
+      it('returns a stored policy with the same validation as the getter', async () => {
+        // Given a stored managed policy
+        const { store, client } = testStore()
+        await saveManagedPolicy(store, { arn: managedArn, policy: fullAccessPolicy })
+        // When finding the policy
+        const result = await client.findManagedPolicy(accountId, managedArn)
+        // Then it matches the getter, including validation
+        expect(result).toEqual(await client.getManagedPolicy(accountId, managedArn))
+        expect(result?.policy.errors).toEqual([])
+      })
+
+      it('returns undefined when only metadata exists', async () => {
+        // Given metadata without a policy document
+        const { store, client } = testStore()
+        await store.saveResourceMetadata(accountId, managedArn, 'metadata', {
+          arn: managedArn,
+          name: 'Policy1'
+        })
+        // When finding the policy
+        const result = await client.findManagedPolicy(accountId, managedArn)
+        // Then metadata alone does not count as a policy
+        expect(result).toBeUndefined()
+      })
+
+      it('returns undefined when nothing is stored', async () => {
+        // Given an empty store
+        const { client } = testStore()
+        // When finding the policy
+        const result = await client.findManagedPolicy(accountId, managedArn)
+        // Then no policy is returned
+        expect(result).toBeUndefined()
+      })
+
+      it('uses the ARN for missing metadata', async () => {
+        // Given a document without metadata
+        const { store, client } = testStore()
+        await store.saveResourceMetadata(accountId, managedArn, 'current-policy', fullAccessPolicy)
+        // When finding the policy
+        const result = await client.findManagedPolicy(accountId, managedArn)
+        // Then the ARN supplies both metadata fields
+        expect(result).toMatchObject({ arn: managedArn, name: managedArn })
+      })
+
+      it('does not find a document stored in another account', async () => {
+        // Given a document stored only in another account
+        const { store, client } = testStore()
+        const policyArn = 'arn:aws:iam::aws:policy/Policy1'
+        await store.saveResourceMetadata(
+          '987654321098',
+          policyArn,
+          'current-policy',
+          fullAccessPolicy
+        )
+        // When finding it in the requested account
+        const result = await client.findManagedPolicy(accountId, policyArn)
+        // Then the other account's document is not returned
+        expect(result).toBeUndefined()
+      })
+    })
+
+    describe('findOrgPolicy', () => {
+      it.each(['scps', 'rcps'] as const)('returns a stored %s policy', async (policyType) => {
+        // Given a policy valid for its type
+        const { store, client } = testStore()
+        const document = policyType === 'scps' ? s3Scp : s3Rcp
+        await store.saveOrganizationPolicyMetadata(orgId, policyType, policyId, 'metadata', {
+          arn: orgArn,
+          name: 'Policy1'
+        })
+        await store.saveOrganizationPolicyMetadata(orgId, policyType, policyId, 'policy', document)
+        // When finding the policy
+        const result = await client.findOrgPolicy(orgId, policyType, orgArn)
+        // Then it matches the getter, including type-specific validation
+        expect(result).toEqual(await client.getOrgPolicy(orgId, policyType, orgArn))
+        expect(result?.policy.errors).toEqual([])
+      })
+
+      it.each(['scps', 'rcps'] as const)(
+        'returns undefined for an absent %s',
+        async (policyType) => {
+          // Given an empty store
+          const { client } = testStore()
+          // When finding the policy
+          const result = await client.findOrgPolicy(orgId, policyType, orgArn)
+          // Then no policy is returned
+          expect(result).toBeUndefined()
+        }
+      )
+
+      it.each(['scps', 'rcps'] as const)(
+        'uses the ARN for missing %s metadata',
+        async (policyType) => {
+          // Given a document without metadata
+          const { store, client } = testStore()
+          const document = policyType === 'scps' ? s3Scp : s3Rcp
+          await store.saveOrganizationPolicyMetadata(
+            orgId,
+            policyType,
+            policyId,
+            'policy',
+            document
+          )
+          // When finding the policy
+          const result = await client.findOrgPolicy(orgId, policyType, orgArn)
+          // Then the ARN supplies both metadata fields
+          expect(result).toMatchObject({ arn: orgArn, name: orgArn })
+        }
+      )
+    })
+
+    it('keeps both getters independent of overridden find methods', async () => {
+      // Given stored policies and a subclass whose find methods return undefined
+      const { store, client } = testStore()
+      await saveManagedPolicy(store, { arn: managedArn, policy: fullAccessPolicy })
+      await store.saveOrganizationPolicyMetadata(orgId, 'scps', policyId, 'metadata', {
+        arn: orgArn,
+        name: 'Policy1'
+      })
+      await store.saveOrganizationPolicyMetadata(orgId, 'scps', policyId, 'policy', s3Scp)
+      class AbsenceOnlyClient extends IamCollectClient {
+        override async findManagedPolicy(): Promise<undefined> {
+          return undefined
+        }
+        override async findOrgPolicy(): Promise<undefined> {
+          return undefined
+        }
+      }
+      const overridden = new AbsenceOnlyClient(store)
+      // When getting both policies through the subclass
+      const managed = await overridden.getManagedPolicy(accountId, managedArn)
+      const org = await overridden.getOrgPolicy(orgId, 'scps', orgArn)
+      // Then both getters still return the original results
+      expect(managed).toEqual(await client.getManagedPolicy(accountId, managedArn))
+      expect(org).toEqual(await client.getOrgPolicy(orgId, 'scps', orgArn))
     })
   })
 
