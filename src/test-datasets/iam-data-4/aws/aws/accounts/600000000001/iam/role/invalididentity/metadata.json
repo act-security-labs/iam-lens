@@ -1,5 +1,0 @@
-{
-  "arn": "arn:aws:iam::600000000001:role/invalididentity",
-  "name": "invalididentity",
-  "path": "/"
-}

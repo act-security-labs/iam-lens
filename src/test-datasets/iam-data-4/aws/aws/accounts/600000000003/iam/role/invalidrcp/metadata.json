@@ -1,5 +1,0 @@
-{
-  "arn": "arn:aws:iam::600000000003:role/invalidrcp",
-  "name": "invalidrcp",
-  "path": "/"
-}

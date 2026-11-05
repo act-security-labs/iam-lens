@@ -1,4 +1,0 @@
-{
-  "arn": "arn:aws:organizations::600000000000:policy/o-invalidtests/service_control_policy/p-invalidscp",
-  "name": "p-invalidscp"
-}

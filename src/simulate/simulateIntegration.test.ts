@@ -32,12 +32,12 @@ const simulateIntegrationTest: {
 }[] = [
   {
     name: 'valid role works with an unrelated invalid policy in the data',
-    data: '4',
+    data: '3',
     request: {
-      resourceArn: 'arn:aws:ec2:us-east-1:600000000001:instance/i-1234567890abcdef0',
-      resourceAccount: '600000000001',
+      resourceArn: 'arn:aws:ec2:us-east-1:900000000001:instance/i-1234567890abcdef0',
+      resourceAccount: '900000000001',
       action: 'ec2:TerminateInstances',
-      principal: 'arn:aws:iam::600000000001:role/valid',
+      principal: 'arn:aws:iam::900000000001:role/valid',
       customContextKeys: {},
       simulationMode: 'Strict'
     },
@@ -45,12 +45,12 @@ const simulateIntegrationTest: {
   },
   {
     name: 'invalid managed identity policy returns a validation error',
-    data: '4',
+    data: '3',
     request: {
-      resourceArn: 'arn:aws:ec2:us-east-1:600000000001:instance/i-1234567890abcdef0',
-      resourceAccount: '600000000001',
+      resourceArn: 'arn:aws:ec2:us-east-1:900000000001:instance/i-1234567890abcdef0',
+      resourceAccount: '900000000001',
       action: 'ec2:TerminateInstances',
-      principal: 'arn:aws:iam::600000000001:role/invalididentity',
+      principal: 'arn:aws:iam::900000000001:role/invalididentity',
       customContextKeys: {},
       simulationMode: 'Strict'
     },
@@ -59,12 +59,12 @@ const simulateIntegrationTest: {
   },
   {
     name: 'invalid permissions boundary returns a validation error',
-    data: '4',
+    data: '3',
     request: {
-      resourceArn: 'arn:aws:ec2:us-east-1:600000000001:instance/i-1234567890abcdef0',
-      resourceAccount: '600000000001',
+      resourceArn: 'arn:aws:ec2:us-east-1:900000000001:instance/i-1234567890abcdef0',
+      resourceAccount: '900000000001',
       action: 'ec2:TerminateInstances',
-      principal: 'arn:aws:iam::600000000001:role/invalidboundary',
+      principal: 'arn:aws:iam::900000000001:role/invalidboundary',
       customContextKeys: {},
       simulationMode: 'Strict'
     },
@@ -73,12 +73,12 @@ const simulateIntegrationTest: {
   },
   {
     name: 'invalid SCP returns a validation error',
-    data: '4',
+    data: '3',
     request: {
-      resourceArn: 'arn:aws:ec2:us-east-1:600000000002:instance/i-1234567890abcdef0',
-      resourceAccount: '600000000002',
+      resourceArn: 'arn:aws:ec2:us-east-1:900000000002:instance/i-1234567890abcdef0',
+      resourceAccount: '900000000002',
       action: 'ec2:TerminateInstances',
-      principal: 'arn:aws:iam::600000000002:role/invalidscp',
+      principal: 'arn:aws:iam::900000000002:role/invalidscp',
       customContextKeys: {},
       simulationMode: 'Strict'
     },
@@ -87,12 +87,12 @@ const simulateIntegrationTest: {
   },
   {
     name: 'invalid RCP returns a validation error',
-    data: '4',
+    data: '3',
     request: {
-      resourceArn: 'arn:aws:ec2:us-east-1:600000000003:instance/i-1234567890abcdef0',
-      resourceAccount: '600000000003',
+      resourceArn: 'arn:aws:ec2:us-east-1:900000000003:instance/i-1234567890abcdef0',
+      resourceAccount: '900000000003',
       action: 'ec2:TerminateInstances',
-      principal: 'arn:aws:iam::600000000003:role/invalidrcp',
+      principal: 'arn:aws:iam::900000000003:role/invalidrcp',
       customContextKeys: {},
       simulationMode: 'Strict'
     },
@@ -2116,9 +2116,18 @@ describe('simulateIntegrationTest', () => {
         }
         expect(result.errors.message).toBe('policy.errors')
         expect(result.errors).toHaveProperty(test.expectedError)
-        expect(JSON.stringify(result.errors)).toContain(
-          'Policy must be an object, received type boolean'
-        )
+        if (
+          test.expectedError === 'identityPolicyErrors' ||
+          test.expectedError === 'permissionBoundaryErrors'
+        ) {
+          expect(JSON.stringify(result.errors)).toContain(
+            'One of Resource or NotResource is required in an identity policy statement'
+          )
+        } else {
+          expect(JSON.stringify(result.errors)).toContain(
+            'Policy must be an object, received type boolean'
+          )
+        }
       } else if (test.expectedError) {
         //If an error is expected
         // Then it should match the expected error

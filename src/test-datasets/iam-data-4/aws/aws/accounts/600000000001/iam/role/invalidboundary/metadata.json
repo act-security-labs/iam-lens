@@ -1,6 +1,0 @@
-{
-  "arn": "arn:aws:iam::600000000001:role/invalidboundary",
-  "name": "invalidboundary",
-  "path": "/",
-  "permissionBoundary": "arn:aws:iam::600000000001:policy/invalid"
-}
