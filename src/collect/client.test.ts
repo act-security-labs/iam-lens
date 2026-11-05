@@ -1929,18 +1929,25 @@ describe('IamCollectClient', () => {
         expect(result).toBeUndefined()
       })
 
-      it('uses the ARN for missing metadata', async () => {
-        // Given a document without metadata
+      it('returns undefined when only the document exists', async () => {
+        //Given a document without metadata
         const { store, client } = testStore()
         await store.saveResourceMetadata(accountId, managedArn, 'current-policy', fullAccessPolicy)
-        // When getting the policy
+        //When getting the policy
         const result = await client.getManagedPolicy(accountId, managedArn)
-        // Then the ARN supplies both metadata fields
-        expect(result).toMatchObject({
-          arn: managedArn,
-          name: managedArn,
-          policy: { metadata: { name: managedArn }, errors: [] }
-        })
+        //Then the policy is absent without metadata
+        expect(result).toBeUndefined()
+      })
+
+      it('returns undefined for null metadata with a document', async () => {
+        //Given a document and null metadata
+        const { store, client } = testStore()
+        await store.saveResourceMetadata(accountId, managedArn, 'metadata', 'null')
+        await store.saveResourceMetadata(accountId, managedArn, 'current-policy', fullAccessPolicy)
+        //When looking up the policy
+        const result = await client.getManagedPolicy(accountId, managedArn)
+        //Then the policy is absent
+        expect(result).toBeUndefined()
       })
 
       it('does not find a document stored in another account', async () => {
@@ -1962,6 +1969,10 @@ describe('IamCollectClient', () => {
       it('validates a stored false document instead of treating it as absent', async () => {
         // Given a stored false document
         const { store, client } = testStore()
+        await store.saveResourceMetadata(accountId, managedArn, 'metadata', {
+          arn: managedArn,
+          name: 'Policy1'
+        })
         await store.saveResourceMetadata(accountId, managedArn, 'current-policy', 'false')
         // When getting the policy
         const result = await client.getManagedPolicy(accountId, managedArn)
@@ -2022,6 +2033,10 @@ describe('IamCollectClient', () => {
         async (policyType) => {
           // Given a stored false document
           const { store, client } = testStore()
+          await store.saveOrganizationPolicyMetadata(orgId, policyType, policyId, 'metadata', {
+            arn: orgArn,
+            name: 'Policy1'
+          })
           await store.saveOrganizationPolicyMetadata(orgId, policyType, policyId, 'policy', 'false')
           // When getting the policy
           const result = await client.getOrgPolicy(orgId, policyType, orgArn)
@@ -2049,7 +2064,7 @@ describe('IamCollectClient', () => {
       )
 
       it.each(['scps', 'rcps'] as const)(
-        'uses the ARN for missing %s metadata',
+        'returns undefined for a document without %s metadata',
         async (policyType) => {
           // Given a document without metadata
           const { store, client } = testStore()
@@ -2063,12 +2078,8 @@ describe('IamCollectClient', () => {
           )
           // When getting the policy
           const result = await client.getOrgPolicy(orgId, policyType, orgArn)
-          // Then the ARN supplies both metadata fields
-          expect(result).toMatchObject({
-            arn: orgArn,
-            name: orgArn,
-            policy: { metadata: { name: orgArn }, errors: [] }
-          })
+          // Then the policy is absent without metadata
+          expect(result).toBeUndefined()
         }
       )
     })
@@ -2135,6 +2146,10 @@ describe('IamCollectClient', () => {
         await store.saveOrganizationPolicyMetadata(orgId, policyType, 'p-missing', 'metadata', {
           arn: missingArn,
           name: 'Missing'
+        })
+        await store.saveOrganizationPolicyMetadata(orgId, policyType, policyId, 'metadata', {
+          arn: orgArn,
+          name: 'Policy1'
         })
         await store.saveOrganizationPolicyMetadata(
           orgId,

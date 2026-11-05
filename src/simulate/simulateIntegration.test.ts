@@ -31,6 +31,75 @@ const simulateIntegrationTest: {
   expectedPatterns?: { pattern: string; result: EvaluationResult }[]
 }[] = [
   {
+    name: 'valid role works with an unrelated invalid policy in the data',
+    data: '4',
+    request: {
+      resourceArn: 'arn:aws:ec2:us-east-1:600000000001:instance/i-1234567890abcdef0',
+      resourceAccount: '600000000001',
+      action: 'ec2:TerminateInstances',
+      principal: 'arn:aws:iam::600000000001:role/valid',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'Allowed'
+  },
+  {
+    name: 'invalid managed identity policy returns a validation error',
+    data: '4',
+    request: {
+      resourceArn: 'arn:aws:ec2:us-east-1:600000000001:instance/i-1234567890abcdef0',
+      resourceAccount: '600000000001',
+      action: 'ec2:TerminateInstances',
+      principal: 'arn:aws:iam::600000000001:role/invalididentity',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'ImplicitlyDenied',
+    expectedError: 'identityPolicyErrors'
+  },
+  {
+    name: 'invalid permissions boundary returns a validation error',
+    data: '4',
+    request: {
+      resourceArn: 'arn:aws:ec2:us-east-1:600000000001:instance/i-1234567890abcdef0',
+      resourceAccount: '600000000001',
+      action: 'ec2:TerminateInstances',
+      principal: 'arn:aws:iam::600000000001:role/invalidboundary',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'ImplicitlyDenied',
+    expectedError: 'permissionBoundaryErrors'
+  },
+  {
+    name: 'invalid SCP returns a validation error',
+    data: '4',
+    request: {
+      resourceArn: 'arn:aws:ec2:us-east-1:600000000002:instance/i-1234567890abcdef0',
+      resourceAccount: '600000000002',
+      action: 'ec2:TerminateInstances',
+      principal: 'arn:aws:iam::600000000002:role/invalidscp',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'ImplicitlyDenied',
+    expectedError: 'serviceControlPolicyErrors'
+  },
+  {
+    name: 'invalid RCP returns a validation error',
+    data: '4',
+    request: {
+      resourceArn: 'arn:aws:ec2:us-east-1:600000000003:instance/i-1234567890abcdef0',
+      resourceAccount: '600000000003',
+      action: 'ec2:TerminateInstances',
+      principal: 'arn:aws:iam::600000000003:role/invalidrcp',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'ImplicitlyDenied',
+    expectedError: 'resourceControlPolicyErrors'
+  },
+  {
     name: 'requested region: regional model in denied region',
     data: '3',
     request: {
@@ -2031,7 +2100,26 @@ describe('simulateIntegrationTest', () => {
       // Given a client
       const collectClient = await getTestDatasetClient(test.data)
 
-      if (test.expectedError) {
+      if (
+        test.expectedError?.endsWith('PolicyErrors') ||
+        test.expectedError === 'permissionBoundaryErrors'
+      ) {
+        //When the collected policy is invalid, assert its structured diagnostics
+        const { result } = await runIntegrationSimulation(
+          test.variant ?? 'normal',
+          request,
+          collectClient
+        )
+        expect(result.resultType).toBe('error')
+        if (result.resultType !== 'error') {
+          throw new Error(`Expected an error result, received ${result.resultType}`)
+        }
+        expect(result.errors.message).toBe('policy.errors')
+        expect(result.errors).toHaveProperty(test.expectedError)
+        expect(JSON.stringify(result.errors)).toContain(
+          'Policy must be an object, received type boolean'
+        )
+      } else if (test.expectedError) {
         //If an error is expected
         // Then it should match the expected error
         await expect(
