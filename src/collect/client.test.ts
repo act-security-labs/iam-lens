@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { makePrincipalIndex } from '../principalIndex/makePrincipalIndex.js'
 import { saveGroup, saveManagedPolicy, saveRole, saveUser } from '../utils/testUtils.js'
-import { IamCollectClient } from './client.js'
 import { testStore } from './inMemoryClient.js'
 
 const fullAccessPolicy = {
@@ -1888,16 +1887,24 @@ describe('IamCollectClient', () => {
     const policyId = 'p-12345678'
     const orgArn = `arn:aws:organizations::${accountId}:policy/${orgId}/${policyId}`
 
-    describe('findManagedPolicy', () => {
-      it('returns a stored policy with the same validation as the getter', async () => {
+    describe('getManagedPolicy', () => {
+      it('returns a stored policy with validation', async () => {
         // Given a stored managed policy
         const { store, client } = testStore()
         await saveManagedPolicy(store, { arn: managedArn, policy: fullAccessPolicy })
-        // When finding the policy
-        const result = await client.findManagedPolicy(accountId, managedArn)
-        // Then it matches the getter, including validation
-        expect(result).toEqual(await client.getManagedPolicy(accountId, managedArn))
-        expect(result?.policy.errors).toEqual([])
+        // When getting the policy
+        const result = await client.getManagedPolicy(accountId, managedArn)
+        // Then it includes the metadata and validated document
+        expect(result).toMatchObject({
+          arn: managedArn,
+          name: 'Policy1',
+          policy: {
+            __validated: true,
+            policyDocument: fullAccessPolicy,
+            metadata: { name: managedArn },
+            errors: []
+          }
+        })
       })
 
       it('returns undefined when only metadata exists', async () => {
@@ -1907,8 +1914,8 @@ describe('IamCollectClient', () => {
           arn: managedArn,
           name: 'Policy1'
         })
-        // When finding the policy
-        const result = await client.findManagedPolicy(accountId, managedArn)
+        // When getting the policy
+        const result = await client.getManagedPolicy(accountId, managedArn)
         // Then metadata alone does not count as a policy
         expect(result).toBeUndefined()
       })
@@ -1916,8 +1923,8 @@ describe('IamCollectClient', () => {
       it('returns undefined when nothing is stored', async () => {
         // Given an empty store
         const { client } = testStore()
-        // When finding the policy
-        const result = await client.findManagedPolicy(accountId, managedArn)
+        // When getting the policy
+        const result = await client.getManagedPolicy(accountId, managedArn)
         // Then no policy is returned
         expect(result).toBeUndefined()
       })
@@ -1926,10 +1933,14 @@ describe('IamCollectClient', () => {
         // Given a document without metadata
         const { store, client } = testStore()
         await store.saveResourceMetadata(accountId, managedArn, 'current-policy', fullAccessPolicy)
-        // When finding the policy
-        const result = await client.findManagedPolicy(accountId, managedArn)
+        // When getting the policy
+        const result = await client.getManagedPolicy(accountId, managedArn)
         // Then the ARN supplies both metadata fields
-        expect(result).toMatchObject({ arn: managedArn, name: managedArn })
+        expect(result).toMatchObject({
+          arn: managedArn,
+          name: managedArn,
+          policy: { metadata: { name: managedArn }, errors: [] }
+        })
       })
 
       it('does not find a document stored in another account', async () => {
@@ -1942,14 +1953,30 @@ describe('IamCollectClient', () => {
           'current-policy',
           fullAccessPolicy
         )
-        // When finding it in the requested account
-        const result = await client.findManagedPolicy(accountId, policyArn)
+        // When getting it in the requested account
+        const result = await client.getManagedPolicy(accountId, policyArn)
         // Then the other account's document is not returned
         expect(result).toBeUndefined()
       })
+
+      it('validates a stored false document instead of treating it as absent', async () => {
+        // Given a stored false document
+        const { store, client } = testStore()
+        await store.saveResourceMetadata(accountId, managedArn, 'current-policy', 'false')
+        // When getting the policy
+        const result = await client.getManagedPolicy(accountId, managedArn)
+        // Then the document is returned with validation errors
+        expect(result).toMatchObject({
+          policy: {
+            __validated: true,
+            policyDocument: false,
+            errors: [{ path: '', message: 'Policy must be an object, received type boolean' }]
+          }
+        })
+      })
     })
 
-    describe('findOrgPolicy', () => {
+    describe('getOrgPolicy', () => {
       it.each(['scps', 'rcps'] as const)('returns a stored %s policy', async (policyType) => {
         // Given a policy valid for its type
         const { store, client } = testStore()
@@ -1959,20 +1986,63 @@ describe('IamCollectClient', () => {
           name: 'Policy1'
         })
         await store.saveOrganizationPolicyMetadata(orgId, policyType, policyId, 'policy', document)
-        // When finding the policy
-        const result = await client.findOrgPolicy(orgId, policyType, orgArn)
-        // Then it matches the getter, including type-specific validation
-        expect(result).toEqual(await client.getOrgPolicy(orgId, policyType, orgArn))
-        expect(result?.policy.errors).toEqual([])
+        // When getting the policy
+        const result = await client.getOrgPolicy(orgId, policyType, orgArn)
+        // Then it includes the metadata and type-specific validation
+        expect(result).toMatchObject({
+          arn: orgArn,
+          name: 'Policy1',
+          policy: {
+            __validated: true,
+            policyDocument: document,
+            metadata: { name: orgArn },
+            errors: []
+          }
+        })
       })
+
+      it.each(['scps', 'rcps'] as const)(
+        'returns undefined when only %s metadata exists',
+        async (policyType) => {
+          // Given metadata without a policy document
+          const { store, client } = testStore()
+          await store.saveOrganizationPolicyMetadata(orgId, policyType, policyId, 'metadata', {
+            arn: orgArn,
+            name: 'Policy1'
+          })
+          // When getting the policy
+          const result = await client.getOrgPolicy(orgId, policyType, orgArn)
+          // Then metadata alone does not count as a policy
+          expect(result).toBeUndefined()
+        }
+      )
+
+      it.each(['scps', 'rcps'] as const)(
+        'validates a stored false %s document instead of treating it as absent',
+        async (policyType) => {
+          // Given a stored false document
+          const { store, client } = testStore()
+          await store.saveOrganizationPolicyMetadata(orgId, policyType, policyId, 'policy', 'false')
+          // When getting the policy
+          const result = await client.getOrgPolicy(orgId, policyType, orgArn)
+          // Then the document is returned with validation errors
+          expect(result).toMatchObject({
+            policy: {
+              __validated: true,
+              policyDocument: false,
+              errors: [{ path: '', message: 'Policy must be an object, received type boolean' }]
+            }
+          })
+        }
+      )
 
       it.each(['scps', 'rcps'] as const)(
         'returns undefined for an absent %s',
         async (policyType) => {
           // Given an empty store
           const { client } = testStore()
-          // When finding the policy
-          const result = await client.findOrgPolicy(orgId, policyType, orgArn)
+          // When getting the policy
+          const result = await client.getOrgPolicy(orgId, policyType, orgArn)
           // Then no policy is returned
           expect(result).toBeUndefined()
         }
@@ -1991,39 +2061,97 @@ describe('IamCollectClient', () => {
             'policy',
             document
           )
-          // When finding the policy
-          const result = await client.findOrgPolicy(orgId, policyType, orgArn)
+          // When getting the policy
+          const result = await client.getOrgPolicy(orgId, policyType, orgArn)
           // Then the ARN supplies both metadata fields
-          expect(result).toMatchObject({ arn: orgArn, name: orgArn })
+          expect(result).toMatchObject({
+            arn: orgArn,
+            name: orgArn,
+            policy: { metadata: { name: orgArn }, errors: [] }
+          })
         }
       )
     })
 
-    it('keeps both getters independent of overridden find methods', async () => {
-      // Given stored policies and a subclass whose find methods return undefined
+    it.each([
+      ['user', 'getManagedPoliciesForUser'],
+      ['group', 'getManagedPoliciesForGroup'],
+      ['role', 'getManagedPoliciesForRole']
+    ] as const)('skips attached %s policies without documents', async (type, getter) => {
+      // Given a principal with one stored policy and one metadata-only policy
       const { store, client } = testStore()
+      const principalArn = `arn:aws:iam::${accountId}:${type}/test-principal`
+      const missingArn = `arn:aws:iam::${accountId}:policy/Missing`
       await saveManagedPolicy(store, { arn: managedArn, policy: fullAccessPolicy })
-      await store.saveOrganizationPolicyMetadata(orgId, 'scps', policyId, 'metadata', {
-        arn: orgArn,
+      await store.saveResourceMetadata(accountId, missingArn, 'metadata', {
+        arn: missingArn,
+        name: 'Missing'
+      })
+      await store.saveResourceMetadata(accountId, principalArn, 'managed-policies', [
+        missingArn,
+        managedArn
+      ])
+      // When getting the attached policies
+      const policies = await client[getter](principalArn)
+      // Then only the policy with a document is returned
+      expect(policies).toMatchObject([{ arn: managedArn }])
+    })
+
+    it.each([
+      ['user', 'getPermissionsBoundaryForUser'],
+      ['role', 'getPermissionsBoundaryForRole']
+    ] as const)('returns undefined for a %s boundary without a document', async (type, getter) => {
+      // Given a principal with a metadata-only boundary policy
+      const { store, client } = testStore()
+      const principalArn = `arn:aws:iam::${accountId}:${type}/test-principal`
+      await store.saveResourceMetadata(accountId, principalArn, 'metadata', {
+        arn: principalArn,
+        permissionBoundary: managedArn
+      })
+      await store.saveResourceMetadata(accountId, managedArn, 'metadata', {
+        arn: managedArn,
         name: 'Policy1'
       })
-      await store.saveOrganizationPolicyMetadata(orgId, 'scps', policyId, 'policy', s3Scp)
-      class AbsenceOnlyClient extends IamCollectClient {
-        override async findManagedPolicy(): Promise<undefined> {
-          return undefined
-        }
-        override async findOrgPolicy(): Promise<undefined> {
-          return undefined
-        }
-      }
-      const overridden = new AbsenceOnlyClient(store)
-      // When getting both policies through the subclass
-      const managed = await overridden.getManagedPolicy(accountId, managedArn)
-      const org = await overridden.getOrgPolicy(orgId, 'scps', orgArn)
-      // Then both getters still return the original results
-      expect(managed).toEqual(await client.getManagedPolicy(accountId, managedArn))
-      expect(org).toEqual(await client.getOrgPolicy(orgId, 'scps', orgArn))
+      // When getting the permissions boundary
+      const boundary = await client[getter](principalArn)
+      // Then it is treated like an absent boundary
+      expect(boundary).toBeUndefined()
     })
+
+    it.each(['scps', 'rcps'] as const)(
+      'skips missing %s documents in account and OU hierarchy lists',
+      async (policyType) => {
+        // Given an account and OU with both stored and metadata-only policies
+        const { store, client } = testStore()
+        const ouId = 'r-1234'
+        const missingArn = `arn:aws:organizations::${accountId}:policy/${orgId}/p-missing`
+        const attachments = { [policyType]: [missingArn, orgArn] }
+        await store.saveIndex('accounts-to-orgs', { [accountId]: orgId }, '')
+        await store.saveOrganizationMetadata(orgId, 'metadata', { rootAccountId: '987654321098' })
+        await store.saveOrganizationMetadata(orgId, 'ous', { [ouId]: attachments })
+        await store.saveOrganizationMetadata(orgId, 'accounts', {
+          [accountId]: { ou: ouId, ...attachments }
+        })
+        await store.saveOrganizationPolicyMetadata(orgId, policyType, 'p-missing', 'metadata', {
+          arn: missingArn,
+          name: 'Missing'
+        })
+        await store.saveOrganizationPolicyMetadata(
+          orgId,
+          policyType,
+          policyId,
+          'policy',
+          policyType === 'scps' ? s3Scp : s3Rcp
+        )
+        // When building the hierarchy through the account and OU list getters
+        const hierarchy = await client.getOrgPolicyHierarchyForAccount(accountId, policyType)
+        // Then every level contains only the policy with a document
+        expect(hierarchy).toMatchObject([
+          { orgIdentifier: ouId, policies: [{ name: orgArn }] },
+          { orgIdentifier: accountId, policies: [{ name: orgArn }] }
+        ])
+      }
+    )
   })
 
   describe('getInlinePoliciesForUser', () => {
