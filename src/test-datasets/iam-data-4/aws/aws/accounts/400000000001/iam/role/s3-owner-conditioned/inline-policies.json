@@ -1,0 +1,26 @@
+[
+  {
+    "PolicyName": "CrossAccountBucketAccess",
+    "PolicyDocument": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Action": ["s3:GetBucketLocation", "s3:GetObject"],
+          "Resource": "*",
+          "Condition": {
+            "StringNotEquals": { "s3:ResourceAccount": "400000000001" }
+          }
+        },
+        {
+          "Effect": "Allow",
+          "Action": ["s3:ListBucket", "s3:GetObjectVersion"],
+          "Resource": "*",
+          "Condition": {
+            "StringEquals": { "s3:ResourceAccount": "400000000001" }
+          }
+        }
+      ]
+    }
+  }
+]

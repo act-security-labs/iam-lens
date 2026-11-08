@@ -1,0 +1,7 @@
+{
+  "arn": "arn:aws:iam::400000000001:role/s3-owner-conditioned",
+  "name": "s3-owner-conditioned",
+  "id": "AROAEXAMPLEOWNER00001",
+  "path": "/",
+  "created": "2025-01-01T00:00:00.000Z"
+}
