@@ -29,6 +29,29 @@ describe('contextValue', () => {
 })
 
 describe('createContextKeys', () => {
+  it('derives the S3 bucket owner only for bucket and object resources', async () => {
+    //Given bucket, object, access point, and wildcard-only requests
+    const client = testStore().client
+    const arns = [
+      'arn:aws:s3:::example-bucket',
+      'arn:aws:s3:::example-bucket/key',
+      'arn:aws:s3:us-east-1:123456789012:accesspoint/example',
+      '*'
+    ]
+
+    //When constructing context for each request
+    const results = await Promise.all(
+      arns.map((resourceArn) =>
+        createContextKeys(client, { ...defaultSimulationRequest, resourceArn }, 's3', {})
+      )
+    )
+
+    //Then only the bucket and object have a known bucket-owner key
+    expect(
+      results.map(({ contextKeys }) => contextValue(contextKeys, 's3:ResourceAccount'))
+    ).toEqual(['123456789012', '123456789012', undefined, undefined])
+  })
+
   describe('aws:RequestedRegion', () => {
     it('uses a concrete ARN region', async () => {
       //Given a regional resource

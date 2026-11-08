@@ -46,6 +46,7 @@ interface ExternalResourceIntegrationCase {
    */
   expectedAnalysis?:
     | 'identity-deny'
+    | 'identity-allowed'
     | 'identity-implicit-deny'
     | 'permission-boundary'
     | 'resource-deny'
@@ -57,6 +58,191 @@ interface ExternalResourceIntegrationCase {
 }
 
 const externalResourceIntegrationCases: ExternalResourceIntegrationCase[] = [
+  {
+    name: 'S3 owner: same account does not grant bucket access by identity',
+    data: '4',
+    request: {
+      principal: 'arn:aws:iam::400000000001:role/s3-owner-conditioned',
+      resourceArn: 'arn:aws:s3:::external-owner-test',
+      resourceAccount: '400000000001',
+      action: 's3:GetBucketLocation',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedAnalysis: 'identity-implicit-deny'
+  },
+  {
+    name: 'S3 owner: same account does not grant object access by identity',
+    data: '4',
+    request: {
+      principal: 'arn:aws:iam::400000000001:role/s3-owner-conditioned',
+      resourceArn: 'arn:aws:s3:::external-owner-test/key',
+      resourceAccount: '400000000001',
+      action: 's3:GetObject',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedAnalysis: 'identity-implicit-deny'
+  },
+  {
+    name: 'S3 owner: different account grants bucket access by identity',
+    data: '4',
+    request: {
+      principal: 'arn:aws:iam::400000000001:role/s3-owner-conditioned',
+      resourceArn: 'arn:aws:s3:::external-owner-test',
+      resourceAccount: '999999999999',
+      action: 's3:GetBucketLocation',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedAnalysis: 'identity-allowed'
+  },
+  {
+    name: 'S3 owner: different account grants object access by identity',
+    data: '4',
+    request: {
+      principal: 'arn:aws:iam::400000000001:role/s3-owner-conditioned',
+      resourceArn: 'arn:aws:s3:::external-owner-test/key',
+      resourceAccount: '999999999999',
+      action: 's3:GetObject',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedAnalysis: 'identity-allowed'
+  },
+  {
+    name: 'S3 owner: caller context overrides generated bucket owner',
+    data: '4',
+    request: {
+      principal: 'arn:aws:iam::400000000001:role/s3-owner-conditioned',
+      resourceArn: 'arn:aws:s3:::external-owner-test',
+      resourceAccount: '400000000001',
+      action: 's3:GetBucketLocation',
+      customContextKeys: { 'S3:RESOURCEACCOUNT': '999999999999' },
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedAnalysis: 'identity-allowed'
+  },
+  {
+    name: 'S3 owner: caller context overrides generated object owner',
+    data: '4',
+    request: {
+      principal: 'arn:aws:iam::400000000001:role/s3-owner-conditioned',
+      resourceArn: 'arn:aws:s3:::external-owner-test/key',
+      resourceAccount: '400000000001',
+      action: 's3:GetObject',
+      customContextKeys: { 'S3:RESOURCEACCOUNT': '999999999999' },
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedAnalysis: 'identity-allowed'
+  },
+  {
+    name: 'S3 owner: caller marks bucket owner value unknown',
+    data: '4',
+    request: {
+      principal: 'arn:aws:iam::400000000001:role/s3-owner-conditioned',
+      resourceArn: 'arn:aws:s3:::external-owner-test',
+      resourceAccount: '400000000001',
+      action: 's3:GetBucketLocation',
+      customContextKeys: {},
+      simulationMode: 'Discovery',
+      discoveryContextKeyConstraints: [
+        { keyName: 's3:ResourceAccount', presenceIsKnown: true, valueIsKnown: false }
+      ]
+    },
+    expected: 'Allowed',
+    expectedAnalysis: 'identity-allowed'
+  },
+  {
+    name: 'S3 owner: caller marks object owner value unknown',
+    data: '4',
+    request: {
+      principal: 'arn:aws:iam::400000000001:role/s3-owner-conditioned',
+      resourceArn: 'arn:aws:s3:::external-owner-test/key',
+      resourceAccount: '400000000001',
+      action: 's3:GetObject',
+      customContextKeys: {},
+      simulationMode: 'Discovery',
+      discoveryContextKeyConstraints: [
+        { keyName: 's3:ResourceAccount', presenceIsKnown: true, valueIsKnown: false }
+      ]
+    },
+    expected: 'Allowed',
+    expectedAnalysis: 'identity-allowed'
+  },
+  {
+    name: 'S3 owner: omitted owner is resolved from the bucket index',
+    data: '4',
+    request: {
+      principal: 'arn:aws:iam::400000000001:role/s3-owner-conditioned',
+      resourceArn: 'arn:aws:s3:::owner-indexed-bucket/key',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedResourceAccount: '400000000001',
+    expectedAnalysis: 'identity-implicit-deny'
+  },
+  {
+    name: 'S3 owner: unresolvable owner is rejected in Strict mode',
+    data: '4',
+    request: {
+      principal: 'arn:aws:iam::400000000001:role/s3-owner-conditioned',
+      resourceArn: 'arn:aws:s3:::uncollected-owner-test/key',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expectedError: 'Unable to find account ID for resource arn:aws:s3:::uncollected-owner-test/key'
+  },
+  {
+    name: 'S3 owner: unresolvable owner is rejected in Discovery mode',
+    data: '4',
+    request: {
+      principal: 'arn:aws:iam::400000000001:role/s3-owner-conditioned',
+      resourceArn: 'arn:aws:s3:::uncollected-owner-test/key',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expectedError: 'Unable to find account ID for resource arn:aws:s3:::uncollected-owner-test/key'
+  },
+  {
+    name: 'S3 owner: context override cannot replace missing account in Strict mode',
+    data: '4',
+    request: {
+      principal: 'arn:aws:iam::400000000001:role/s3-owner-conditioned',
+      resourceArn: 'arn:aws:s3:::uncollected-owner-test/key',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      customContextKeys: { 's3:ResourceAccount': '999999999999' },
+      simulationMode: 'Strict'
+    },
+    expectedError: 'Unable to find account ID for resource arn:aws:s3:::uncollected-owner-test/key'
+  },
+  {
+    name: 'S3 owner: context override cannot replace missing account in Discovery mode',
+    data: '4',
+    request: {
+      principal: 'arn:aws:iam::400000000001:role/s3-owner-conditioned',
+      resourceArn: 'arn:aws:s3:::uncollected-owner-test/key',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      customContextKeys: { 's3:ResourceAccount': '999999999999' },
+      simulationMode: 'Discovery'
+    },
+    expectedError: 'Unable to find account ID for resource arn:aws:s3:::uncollected-owner-test/key'
+  },
   {
     name: 'allows access to an uncollected resource with the synthetic resource policy',
     data: '2',
@@ -478,7 +664,9 @@ function assertExpectedAnalysis(
     assert.fail(`Expected single result, got ${response.result.resultType}`)
   }
   const analysis = response.result.result.analysis
-  if (expectedAnalysis === 'identity-deny') {
+  if (expectedAnalysis === 'identity-allowed') {
+    expect(analysis.identityAnalysis?.result).toBe('Allowed')
+  } else if (expectedAnalysis === 'identity-deny') {
     expect(analysis.identityAnalysis?.result).toBe('ExplicitlyDenied')
   } else if (expectedAnalysis === 'identity-implicit-deny') {
     expect(analysis.identityAnalysis?.result).toBe('ImplicitlyDenied')
