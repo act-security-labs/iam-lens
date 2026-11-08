@@ -1,3 +1,10 @@
+## [0.1.195](https://github.com/act-security-labs/iam-lens/compare/v0.1.194...v0.1.195) (2026-11-08)
+
+
+### Bug Fixes
+
+* model S3 resource account in discovery ([#251](https://github.com/act-security-labs/iam-lens/issues/251)) ([4369d73](https://github.com/act-security-labs/iam-lens/commit/4369d73e5fffa8f8724dd43fab5aa3a051cd1754))
+
 ## [0.1.194](https://github.com/act-security-labs/iam-lens/compare/v0.1.193...v0.1.194) (2026-11-08)
 
 ## [0.1.193](https://github.com/act-security-labs/iam-lens/compare/v0.1.192...v0.1.193) (2026-11-04)
