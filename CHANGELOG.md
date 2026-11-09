@@ -1,3 +1,10 @@
+## [0.1.197](https://github.com/act-security-labs/iam-lens/compare/v0.1.196...v0.1.197) (2026-11-09)
+
+
+### Bug Fixes
+
+* stagger dependency update schedule ([#252](https://github.com/act-security-labs/iam-lens/issues/252)) ([0a9bb08](https://github.com/act-security-labs/iam-lens/commit/0a9bb080dbaa65a3842985cade6f3877559f86af))
+
 ## [0.1.196](https://github.com/act-security-labs/iam-lens/compare/v0.1.195...v0.1.196) (2026-11-09)
 
 
