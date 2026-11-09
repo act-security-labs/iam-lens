@@ -1,3 +1,10 @@
+## [0.1.196](https://github.com/act-security-labs/iam-lens/compare/v0.1.195...v0.1.196) (2026-11-09)
+
+
+### Features
+
+* return undefined from getManagedPolicy and getOrgPolicy when no document is stored ([#249](https://github.com/act-security-labs/iam-lens/issues/249)) ([0fc7bef](https://github.com/act-security-labs/iam-lens/commit/0fc7bef721e5f3a7e0bd6331d1235a5d62a887dc))
+
 ## [0.1.195](https://github.com/act-security-labs/iam-lens/compare/v0.1.194...v0.1.195) (2026-11-08)
 
 
