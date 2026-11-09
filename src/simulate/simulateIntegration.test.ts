@@ -44,6 +44,45 @@ const simulateIntegrationTest: {
     expected: 'Allowed'
   },
   {
+    name: 'S3 owner condition rejects same-owner bucket access in discovery',
+    data: '4',
+    request: {
+      resourceArn: 'arn:aws:s3:::owner-condition-bucket',
+      resourceAccount: '400000000001',
+      action: 's3:GetBucketLocation',
+      principal: 'arn:aws:iam::400000000001:role/s3-owner-conditioned',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ImplicitlyDenied'
+  },
+  {
+    name: 'S3 owner condition rejects same-owner object access in discovery',
+    data: '4',
+    request: {
+      resourceArn: 'arn:aws:s3:::owner-condition-bucket/key',
+      resourceAccount: '400000000001',
+      action: 's3:GetObject',
+      principal: 'arn:aws:iam::400000000001:role/s3-owner-conditioned',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ImplicitlyDenied'
+  },
+  {
+    name: 'S3 owner condition allows same-owner bucket access in discovery',
+    data: '4',
+    request: {
+      resourceArn: 'arn:aws:s3:::owner-condition-bucket',
+      resourceAccount: '400000000001',
+      action: 's3:ListBucket',
+      principal: 'arn:aws:iam::400000000001:role/s3-owner-conditioned',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed'
+  },
+  {
     name: 'invalid managed identity policy returns a validation error',
     data: '3',
     request: {
@@ -98,6 +137,45 @@ const simulateIntegrationTest: {
     },
     expected: 'ImplicitlyDenied',
     expectedError: 'resourceControlPolicyErrors'
+  },
+  {
+    name: 'S3 owner condition allows same-owner object access in discovery',
+    data: '4',
+    request: {
+      resourceArn: 'arn:aws:s3:::owner-condition-bucket/key',
+      resourceAccount: '400000000001',
+      action: 's3:GetObjectVersion',
+      principal: 'arn:aws:iam::400000000001:role/s3-owner-conditioned',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed'
+  },
+  {
+    name: 'S3 owner condition allows bucket access with a different owner context',
+    data: '4',
+    request: {
+      resourceArn: 'arn:aws:s3:::owner-condition-bucket',
+      resourceAccount: '400000000001',
+      action: 's3:GetBucketLocation',
+      principal: 'arn:aws:iam::400000000001:role/s3-owner-conditioned',
+      customContextKeys: { 's3:ResourceAccount': '999999999999' },
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed'
+  },
+  {
+    name: 'S3 owner condition allows object access with a different owner context',
+    data: '4',
+    request: {
+      resourceArn: 'arn:aws:s3:::owner-condition-bucket/key',
+      resourceAccount: '400000000001',
+      action: 's3:GetObject',
+      principal: 'arn:aws:iam::400000000001:role/s3-owner-conditioned',
+      customContextKeys: { 's3:ResourceAccount': '999999999999' },
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed'
   },
   {
     name: 'requested region: regional model in denied region',

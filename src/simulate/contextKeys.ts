@@ -281,6 +281,16 @@ export async function createContextKeys(
     }
   }
 
+  // S3 supplies the bucket owner's account under its service-specific key.
+  if (
+    equalsIgnoreCase(service, 's3') &&
+    simulationRequest.resourceAccount &&
+    simulationRequest.resourceArn &&
+    isS3BucketOrObjectArn(simulationRequest.resourceArn)
+  ) {
+    contextKeys['s3:ResourceAccount'] = simulationRequest.resourceAccount
+  }
+
   //Resource context keys
   if (actionSupportsAwsResourceInfoContextKeys(simulationRequest.action)) {
     contextKeys['aws:ResourceAccount'] = simulationRequest.resourceAccount!

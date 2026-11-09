@@ -15,6 +15,52 @@ import {
 } from './simulate.js'
 
 describe('simulateRequest', () => {
+  it.each(['arn:aws:s3:::example-bucket', 'arn:aws:s3:::example-bucket/*'])(
+    'evaluates the S3 resource account condition in discovery for %s',
+    async (resourceArn) => {
+      //Given an identity grant restricted to a different resource owner
+      const { store, client } = testStore()
+      const accountId = '123456789012'
+      const principal = `arn:aws:iam::${accountId}:role/ExampleRole`
+      await saveRole(store, {
+        arn: principal,
+        inlinePolicies: [
+          {
+            PolicyName: 'CrossAccount',
+            PolicyDocument: {
+              Version: '2012-10-17',
+              Statement: {
+                Effect: 'Allow',
+                Action: 's3:*',
+                Resource: '*',
+                Condition: { StringNotEquals: { 's3:ResourceAccount': accountId } }
+              }
+            }
+          }
+        ]
+      })
+      const action = resourceArn.endsWith('/*') ? 's3:GetObject' : 's3:GetBucketLocation'
+      const request = {
+        simulationMode: 'Discovery' as const,
+        principal,
+        resourceArn,
+        resourceAccount: accountId,
+        action,
+        customContextKeys: {}
+      }
+
+      //When the owner is equal and when a caller explicitly overrides it
+      const same = await simulateRequest(request, client)
+      const overridden = await simulateRequest(
+        { ...request, customContextKeys: { 'S3:RESOURCEACCOUNT': '999999999999' } },
+        client
+      )
+
+      //Then the same-owner grant does not apply, while the explicit override is honored
+      expect(same.result.overallResult).toBe('ImplicitlyDenied')
+      expect(overridden.result.overallResult).toBe('Allowed')
+    }
+  )
   it.each(['metadata', 'bpa', 's3-bpa'] as const)(
     'simulates an S3 request with JSON null %s metadata',
     async (metadataKind) => {
