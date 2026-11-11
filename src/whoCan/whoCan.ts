@@ -83,6 +83,13 @@ export interface ResourceAccessRequest {
   resourceAccount?: string
 
   /**
+   * Complete resource tag set. A supplied map overrides collected tags; null or undefined
+   * uses collected tags when available and otherwise leaves the tag set unknown.
+   * For S3 bucket or object requests, these are the bucket's tags.
+   */
+  resourceTags?: Record<string, string> | null
+
+  /**
    * The actions to check access for. If not provided, actions will be looked up based on the resource ARN.
    */
   actions: string[]
@@ -353,6 +360,7 @@ export async function whoCan(
     processor.enqueueWhoCan({
       resource: request.resource,
       resourceAccount: request.resourceAccount,
+      resourceTags: request.resourceTags,
       actions: request.actions,
       sort: request.sort,
       denyDetailsCallback: request.denyDetailsCallback,

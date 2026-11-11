@@ -86,6 +86,13 @@ export interface SimulationRequest {
   customContextKeys: ContextKeys
 
   /**
+   * Complete resource tag set. A supplied map overrides collected tags; null or undefined
+   * uses collected tags when available and otherwise leaves the tag set unknown.
+   * For S3 bucket or object requests, these are the bucket's tags.
+   */
+  resourceTags?: Record<string, string> | null
+
+  /**
    * The simulation mode to use for the request.
    */
   simulationMode: SimulationMode

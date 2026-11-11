@@ -21,6 +21,7 @@ import {
   simulateRequest
 } from './simulate/simulate.js'
 import { iamLensVersion } from './utils/packageVersion.js'
+import { resourceTagsFromCli } from './utils/resourceTagsArgument.js'
 import { stringOrFileArgument } from './utils/stringOrFileArgument.js'
 import { whoCan } from './whoCan/whoCan.js'
 
@@ -45,6 +46,13 @@ const main = async () => {
           action: stringArgument({
             description:
               'The action to simulate; must be a valid IAM service and action such as `s3:ListBucket`'
+          }),
+          resourceTags: mapArgument({
+            description: 'Resource tags as key and value; repeat --resource-tags for each tag'
+          }),
+          untagged: booleanArgument({
+            description: 'Treat the resource as untagged rather than using collected tags',
+            character: 'u'
           }),
           context: mapArgument({
             description:
@@ -101,6 +109,13 @@ const main = async () => {
           resourceAccount: stringArgument({
             description:
               'The account ID of the resource, only required if it cannot be determined from the resource ARN. Required for wildcard actions'
+          }),
+          resourceTags: mapArgument({
+            description: 'Resource tags as key and value; repeat --resource-tags for each tag'
+          }),
+          untagged: booleanArgument({
+            description: 'Treat the resource as untagged rather than using collected tags',
+            character: 'u'
           }),
           actions: stringArrayArgument({
             description:
@@ -168,6 +183,7 @@ const main = async () => {
           principal: cli.args.principal,
           resource: cli.args.resource,
           resourceAccount: cli.args.resourceAccount,
+          resourceTags: resourceTagsFromCli(cli.args.resourceTags, cli.args.untagged),
           action: cli.args.action,
           customContextKeys: singularizeOneEntryArrays(cli.args.context),
           sessionPolicy: cli.args.sessionPolicy,
@@ -220,6 +236,7 @@ const main = async () => {
       resource: cli.args.resource!,
       actions: cli.args.actions!,
       resourceAccount: cli.args.resourceAccount,
+      resourceTags: resourceTagsFromCli(cli.args.resourceTags, cli.args.untagged),
       s3AbacOverride: cli.args.s3AbacOverride,
       sort: cli.args.sort
     })

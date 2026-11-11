@@ -22,6 +22,9 @@ interface BaseWhoCanWorkItem {
   /** Account that owns the resource being evaluated, when applicable. */
   resourceAccount: string | undefined
 
+  /** Complete caller-supplied resource tags, or no additional tag knowledge. */
+  resourceTags?: Record<string, string> | null
+
   /** IAM action evaluated by this scheduled simulation. */
   action: string
 
@@ -198,6 +201,7 @@ export async function executeWhoCan(
     const request = {
       resourceArn: resource,
       resourceAccount,
+      resourceTags: workItem.resourceTags,
       action,
       customContextKeys: {},
       simulationMode,
