@@ -9,12 +9,30 @@ const baseOptions: SimulateCliOptions = {
 }
 
 describe('selectSimulateCliVariant', () => {
+  it('passes supplied resource tags to normal and anonymous simulations', () => {
+    //Given CLI options that identify a complete resource tag set
+    const options = { ...baseOptions, resourceTags: { env: 'dev' } }
+
+    //When selecting authenticated and anonymous variants
+    const normal = selectSimulateCliVariant(options)
+    const anonymous = selectSimulateCliVariant({
+      ...options,
+      anonymous: true,
+      principal: undefined
+    })
+
+    //Then both requests retain the supplied tags
+    expect(normal.request.resourceTags).toEqual({ env: 'dev' })
+    expect(anonymous.request.resourceTags).toEqual({ env: 'dev' })
+  })
+
   it('should select normal simulation when no variant flag is set', () => {
     //Given standard simulation options
     //When selecting the CLI variant
     const selection = selectSimulateCliVariant(baseOptions)
 
     //Then normal simulation and its authenticated request should be selected
+    expect(selection.request).not.toHaveProperty('resourceTags')
     expect(selection).toEqual({
       variant: 'normal',
       request: {

@@ -308,14 +308,21 @@ export async function createContextKeys(
   }
 
   let resourceTagsAreKnown = false
-  if (simulationRequest.resourceArn && options.includeResourceMetadata !== false) {
-    const isBucket = isS3BucketOrObjectArn(simulationRequest.resourceArn)
-    const { tags: resourceTags, present: resourceTagsPreset } =
-      await collectClient.getTagsForResource(
-        isBucket ? bucketArn(simulationRequest.resourceArn) : simulationRequest.resourceArn,
-        simulationRequest.resourceAccount!
-      )
-    resourceTagsAreKnown = resourceTagsPreset
+  let resourceTags = simulationRequest.resourceTags
+  const isBucket = simulationRequest.resourceArn
+    ? isS3BucketOrObjectArn(simulationRequest.resourceArn)
+    : false
+  if (resourceTags != null) {
+    resourceTagsAreKnown = true
+  } else if (simulationRequest.resourceArn && options.includeResourceMetadata !== false) {
+    const collected = await collectClient.getTagsForResource(
+      isBucket ? bucketArn(simulationRequest.resourceArn) : simulationRequest.resourceArn,
+      simulationRequest.resourceAccount!
+    )
+    resourceTags = collected.tags
+    resourceTagsAreKnown = collected.present
+  }
+  if (resourceTags != null) {
     const serviceTagKeyPrefixes = await serviceResourceTagKeyPrefixes(simulationRequest.action)
     for (const [key, value] of Object.entries(resourceTags)) {
       contextKeys[`aws:ResourceTag/${key}`] = value

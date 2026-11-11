@@ -41,6 +41,11 @@ export interface SimulateCliOptions {
   resourceAccount?: string
 
   /**
+   * Complete resource tag set supplied on the command line, when known.
+   */
+  resourceTags?: Record<string, string>
+
+  /**
    * IAM action supplied on the command line.
    */
   action?: string
@@ -160,6 +165,7 @@ export function selectSimulateCliVariant(options: SimulateCliOptions): SimulateC
   const commonRequest = {
     resourceArn: options.resource,
     resourceAccount: options.resourceAccount,
+    ...(options.resourceTags !== undefined ? { resourceTags: options.resourceTags } : {}),
     action: options.action,
     customContextKeys: options.customContextKeys,
     simulationMode: 'Strict' as const,

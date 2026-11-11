@@ -58,10 +58,14 @@ Example output snippet:
 | `--resource <arn>`           | The ARN of the resource to check permissions for. Ignore for wildcard-only actions such as `iam:ListRoles`.                                                                                                            |
 | `--resource-account <id>`    | The account ID of the resource, only required if it cannot be determined from the resource ARN. Required for wildcard actions such as `ec2:DescribeInstances`.                                                         |
 | `--actions <service:action>` | One or more actions to check such as `s3:GetObject`. Specify as many actions as you want. If omitted it will analyze all valid actions for the resource. If no `--resource` is specified then actions must be entered. |
+| `--resource-tags <key> <value>` | Supply a resource tag; repeat to supply additional tags. The supplied tags form the complete set. |
+| `-u`, `--untagged`            | Declare that the resource has no tags; cannot be combined with `--resource-tags`. |
 | `--s3-abac-override`         | Override the S3 ABAC setting for S3 buckets. Defaults to the bucket setting stored in your iam-collect data. Valid values are `enabled` or `disabled`.                                                                 |
 | `-s`, `--sort`               | Sort the results before outputting.                                                                                                                                                                                    |
 
 You can also include any [Global CLI Options](docs/GlobalCliOptions.md).
+
+For resource tags, repeat `--resource-tags <key> <value>` for each tag. This supplies the complete tag set and overrides collected tags. Use `--untagged` to declare a known-empty set; it cannot be combined with `--resource-tags`. Without either option, collected tags are used when available and otherwise remain unknown. For S3 bucket and object requests, supply the bucket's tags; S3 ABAC settings still apply.
 
 ## Examples
 

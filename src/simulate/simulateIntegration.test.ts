@@ -31,6 +31,184 @@ const simulateIntegrationTest: {
   expectedPatterns?: { pattern: string; result: EvaluationResult }[]
 }[] = [
   {
+    name: 'explicit matching resource tags allow an uncollected secret',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:secretsmanager:us-east-1:400000000002:secret:new-db-AbCdEf',
+      resourceAccount: undefined,
+      action: 'secretsmanager:DescribeSecret',
+      principal: 'arn:aws:iam::400000000002:user/operator',
+      customContextKeys: {},
+      resourceTags: { env: 'dev' },
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedConditions: undefined
+  },
+  {
+    name: 'strict simulation uses supplied matching resource tags',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:secretsmanager:us-east-1:400000000002:secret:new-db-AbCdEf',
+      resourceAccount: undefined,
+      action: 'secretsmanager:DescribeSecret',
+      principal: 'arn:aws:iam::400000000002:user/operator',
+      customContextKeys: {},
+      resourceTags: { env: 'dev' },
+      simulationMode: 'Strict'
+    },
+    expected: 'Allowed'
+  },
+  {
+    name: 'explicit S3 bucket tags allow the matching ABAC role',
+    data: '1',
+    request: {
+      resourceArn: 'arn:aws:s3:::finance-bucket-w-abac',
+      resourceAccount: undefined,
+      action: 's3:ListBucket',
+      principal: 'arn:aws:iam::200000000002:role/S3AbacRole',
+      customContextKeys: {},
+      resourceTags: { Dept: 'Finance' },
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed'
+  },
+  {
+    name: 'explicit bucket tags apply to an S3 object request',
+    data: '1',
+    request: {
+      resourceArn: 'arn:aws:s3:::finance-bucket-w-abac/report.txt',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      principal: 'arn:aws:iam::200000000002:role/S3AbacRole',
+      customContextKeys: {},
+      resourceTags: { Dept: 'Finance' },
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed'
+  },
+  {
+    name: 'explicit empty S3 bucket tags deny the ABAC role',
+    data: '1',
+    request: {
+      resourceArn: 'arn:aws:s3:::finance-bucket-w-abac',
+      resourceAccount: undefined,
+      action: 's3:ListBucket',
+      principal: 'arn:aws:iam::200000000002:role/S3AbacRole',
+      customContextKeys: {},
+      resourceTags: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ImplicitlyDenied'
+  },
+  {
+    name: 'explicit empty resource tags override collected secret tags',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:secretsmanager:us-east-1:400000000002:secret:dev-db-AbCdEf',
+      resourceAccount: undefined,
+      action: 'secretsmanager:DescribeSecret',
+      principal: 'arn:aws:iam::400000000002:user/operator',
+      customContextKeys: {},
+      resourceTags: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ExplicitlyDenied',
+    expectedConditions: undefined
+  },
+  {
+    name: 'explicit nonmatching resource tags override collected secret tags',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:secretsmanager:us-east-1:400000000002:secret:dev-db-AbCdEf',
+      resourceAccount: undefined,
+      action: 'secretsmanager:DescribeSecret',
+      principal: 'arn:aws:iam::400000000002:user/operator',
+      customContextKeys: {},
+      resourceTags: { env: 'prod' },
+      simulationMode: 'Discovery'
+    },
+    expected: 'ExplicitlyDenied',
+    expectedConditions: undefined
+  },
+  {
+    name: 'undefined resource tags use collected secret tags',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:secretsmanager:us-east-1:400000000002:secret:dev-db-AbCdEf',
+      resourceAccount: undefined,
+      action: 'secretsmanager:DescribeSecret',
+      principal: 'arn:aws:iam::400000000002:user/operator',
+      customContextKeys: {},
+      resourceTags: undefined,
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedConditions: undefined
+  },
+  {
+    name: 'null resource tags use collected secret tags',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:secretsmanager:us-east-1:400000000002:secret:dev-db-AbCdEf',
+      resourceAccount: undefined,
+      action: 'secretsmanager:DescribeSecret',
+      principal: 'arn:aws:iam::400000000002:user/operator',
+      customContextKeys: {},
+      resourceTags: null,
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedConditions: undefined
+  },
+  {
+    name: 'null resource tags leave an uncollected secret conditional',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:secretsmanager:us-east-1:400000000002:secret:new-db-AbCdEf',
+      resourceAccount: undefined,
+      action: 'secretsmanager:DescribeSecret',
+      principal: 'arn:aws:iam::400000000002:user/operator',
+      customContextKeys: {},
+      resourceTags: null,
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedConditions: {
+      conditionType: 'condition',
+      op: 'StringEquals',
+      key: 'secretsmanager:ResourceTag/env',
+      values: ['dev'],
+      inverted: true,
+      sources: [
+        {
+          effect: 'Deny',
+          policyIdentifier:
+            'arn:aws:organizations::400000000001:policy/o-44444444/service_control_policy/p-servicetagkeys',
+          policyType: 'scp',
+          orgIdentifier: '400000000002',
+          statementId: 'DescribeOnlyDevSecrets',
+          statementIndex: 1
+        }
+      ]
+    }
+  },
+  {
+    name: 'custom tag context overrides explicit resource tags',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:secretsmanager:us-east-1:400000000002:secret:new-db-AbCdEf',
+      resourceAccount: undefined,
+      action: 'secretsmanager:DescribeSecret',
+      principal: 'arn:aws:iam::400000000002:user/operator',
+      customContextKeys: { 'secretsmanager:ResourceTag/env': 'dev' },
+      resourceTags: { env: 'prod' },
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedConditions: undefined
+  },
+  {
     name: 'valid role works with an unrelated invalid policy in the data',
     data: '3',
     request: {

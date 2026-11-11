@@ -134,6 +134,190 @@ interface WhoCanIntegrationTest {
 
 const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
   {
+    name: 'explicit matching S3 bucket tags allow the ABAC role',
+    data: '1',
+    request: {
+      resource: 'arn:aws:s3:::finance-bucket-w-abac',
+      actions: ['s3:ListBucket'],
+      principalScope: { principals: ['arn:aws:iam::200000000002:role/S3AbacRole'] },
+      resourceTags: { Dept: 'Finance' }
+    },
+    expected: {
+      who: [
+        {
+          principal: 'arn:aws:iam::200000000002:role/S3AbacRole',
+          service: 's3',
+          action: 'ListBucket',
+          level: 'list',
+          resourceType: 'bucket'
+        }
+      ]
+    }
+  },
+  {
+    name: 'explicit bucket tags apply to an S3 object request',
+    data: '1',
+    request: {
+      resource: 'arn:aws:s3:::finance-bucket-w-abac/report.txt',
+      actions: ['s3:GetObject'],
+      principalScope: { principals: ['arn:aws:iam::200000000002:role/S3AbacRole'] },
+      resourceTags: { Dept: 'Finance' }
+    },
+    expected: {
+      who: [
+        {
+          principal: 'arn:aws:iam::200000000002:role/S3AbacRole',
+          service: 's3',
+          action: 'GetObject',
+          level: 'read',
+          resourceType: 'object'
+        }
+      ]
+    }
+  },
+  {
+    name: 'explicit empty S3 bucket tags deny the ABAC role',
+    data: '1',
+    request: {
+      resource: 'arn:aws:s3:::finance-bucket-w-abac',
+      actions: ['s3:ListBucket'],
+      principalScope: { principals: ['arn:aws:iam::200000000002:role/S3AbacRole'] },
+      resourceTags: {}
+    },
+    expected: { who: [] }
+  },
+  {
+    name: 'explicit matching resource tags allow access to an uncollected secret',
+    data: '3',
+    request: {
+      resource: 'arn:aws:secretsmanager:us-east-1:400000000002:secret:new-db-AbCdEf',
+      actions: ['secretsmanager:DescribeSecret'],
+      principalScope: { principals: ['arn:aws:iam::400000000002:user/operator'] },
+      resourceTags: { env: 'dev' }
+    },
+    expected: {
+      who: [
+        {
+          principal: 'arn:aws:iam::400000000002:user/operator',
+          service: 'secretsmanager',
+          action: 'DescribeSecret',
+          level: 'read',
+          resourceType: 'Secret'
+        }
+      ]
+    }
+  },
+  {
+    name: 'explicit empty resource tags override collected secret tags',
+    data: '3',
+    request: {
+      resource: 'arn:aws:secretsmanager:us-east-1:400000000002:secret:dev-db-AbCdEf',
+      actions: ['secretsmanager:DescribeSecret'],
+      principalScope: { principals: ['arn:aws:iam::400000000002:user/operator'] },
+      resourceTags: {}
+    },
+    expected: { who: [] }
+  },
+  {
+    name: 'explicit nonmatching resource tags override collected secret tags',
+    data: '3',
+    request: {
+      resource: 'arn:aws:secretsmanager:us-east-1:400000000002:secret:dev-db-AbCdEf',
+      actions: ['secretsmanager:DescribeSecret'],
+      principalScope: { principals: ['arn:aws:iam::400000000002:user/operator'] },
+      resourceTags: { env: 'prod' }
+    },
+    expected: { who: [] }
+  },
+  {
+    name: 'undefined resource tags use collected secret tags',
+    data: '3',
+    request: {
+      resource: 'arn:aws:secretsmanager:us-east-1:400000000002:secret:dev-db-AbCdEf',
+      actions: ['secretsmanager:DescribeSecret'],
+      principalScope: { principals: ['arn:aws:iam::400000000002:user/operator'] },
+      resourceTags: undefined
+    },
+    expected: {
+      who: [
+        {
+          principal: 'arn:aws:iam::400000000002:user/operator',
+          service: 'secretsmanager',
+          action: 'DescribeSecret',
+          level: 'read',
+          resourceType: 'Secret'
+        }
+      ]
+    }
+  },
+  {
+    name: 'null resource tags use collected secret tags',
+    data: '3',
+    request: {
+      resource: 'arn:aws:secretsmanager:us-east-1:400000000002:secret:dev-db-AbCdEf',
+      actions: ['secretsmanager:DescribeSecret'],
+      principalScope: { principals: ['arn:aws:iam::400000000002:user/operator'] },
+      resourceTags: null
+    },
+    expected: {
+      who: [
+        {
+          principal: 'arn:aws:iam::400000000002:user/operator',
+          service: 'secretsmanager',
+          action: 'DescribeSecret',
+          level: 'read',
+          resourceType: 'Secret'
+        }
+      ]
+    }
+  },
+  {
+    name: 'null resource tags leave an uncollected secret conditional',
+    data: '3',
+    request: {
+      resource: 'arn:aws:secretsmanager:us-east-1:400000000002:secret:new-db-AbCdEf',
+      actions: ['secretsmanager:DescribeSecret'],
+      principalScope: { principals: ['arn:aws:iam::400000000002:user/operator'] },
+      resourceTags: null
+    },
+    expected: {
+      who: [
+        {
+          principal: 'arn:aws:iam::400000000002:user/operator',
+          service: 'secretsmanager',
+          action: 'DescribeSecret',
+          level: 'read',
+          resourceType: 'Secret',
+          conditions: {
+            conditionType: 'condition',
+            op: 'StringEquals',
+            key: 'secretsmanager:ResourceTag/env',
+            values: ['dev'],
+            inverted: true,
+            sources: [
+              {
+                effect: 'Deny',
+                policyIdentifier:
+                  'arn:aws:organizations::400000000001:policy/o-44444444/service_control_policy/p-servicetagkeys',
+                policyType: 'scp',
+                orgIdentifier: '400000000002',
+                statementId: 'DescribeOnlyDevSecrets',
+                statementIndex: 1
+              }
+            ]
+          },
+          ignoredConditions: {
+            scp: {
+              deny: [
+                { op: 'StringNotEquals', key: 'secretsmanager:ResourceTag/env', values: ['dev'] }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
     name: 'valid principal despite unrelated invalid policy data',
     data: '3',
     request: {
@@ -4543,11 +4727,7 @@ async function runParallelProcessorTest(
       const analyses: LightRequestAnalysis[] = []
       callbackAnalyses.set(i, analyses)
       const requestId = processor.enqueueWhoCan({
-        actions: request.actions,
-        resource: request.resource,
-        resourceAccount: request.resourceAccount,
-        principalScope: request.principalScope,
-        discoveryContextKeyConstraints: request.discoveryContextKeyConstraints,
+        ...request,
         denyDetailsCallback: request.denyDetailsCallback
           ? (analysis) => {
               analyses.push(analysis)

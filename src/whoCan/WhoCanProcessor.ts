@@ -140,6 +140,9 @@ export interface WhoCanProcessorRequest {
   /** The account ID the resource belongs to. */
   resourceAccount?: string
 
+  /** Complete resource tag set; null or undefined defers to collected tags. */
+  resourceTags?: Record<string, string> | null
+
   /** The actions to check access for. */
   actions: string[]
 
@@ -771,7 +774,7 @@ export class WhoCanProcessor {
    * @param scenario - The simulation work to enqueue.
    */
   private enqueueScenario(state: RequestState, scenario: WhoCanWorkItem): void {
-    state.scenarios.enqueue(scenario)
+    state.scenarios.enqueue({ ...scenario, resourceTags: state.request.resourceTags })
     state.created++
     if (!this.simulationNotificationPending) {
       this.simulationNotificationPending = true
