@@ -1,3 +1,10 @@
+## [0.1.198](https://github.com/act-security-labs/iam-lens/compare/v0.1.197...v0.1.198) (2026-11-11)
+
+
+### Features
+
+* support caller-supplied resource tags ([#253](https://github.com/act-security-labs/iam-lens/issues/253)) ([c57590c](https://github.com/act-security-labs/iam-lens/commit/c57590c01d5e100f3d0f071a75d86618a8892287))
+
 ## [0.1.197](https://github.com/act-security-labs/iam-lens/compare/v0.1.196...v0.1.197) (2026-11-09)
 
 
