@@ -134,6 +134,273 @@ interface WhoCanIntegrationTest {
 
 const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
   {
+    name: 'Lambda version uses matching parent function tags',
+    data: '3',
+    request: {
+      resource: 'arn:aws:lambda:us-east-1:400000000002:function:tag-test-match:1',
+      actions: ['lambda:GetProvisionedConcurrencyConfig'],
+      principalScope: { principals: ['arn:aws:iam::400000000002:user/operator'] }
+    },
+    expected: {
+      who: [
+        {
+          principal: 'arn:aws:iam::400000000002:user/operator',
+          service: 'lambda',
+          action: 'GetProvisionedConcurrencyConfig',
+          level: 'read',
+          resourceType: 'function version'
+        }
+      ]
+    }
+  },
+  {
+    name: 'Lambda alias uses matching parent function tags',
+    data: '3',
+    request: {
+      resource: 'arn:aws:lambda:us-east-1:400000000002:function:tag-test-match:live',
+      actions: ['lambda:GetProvisionedConcurrencyConfig'],
+      principalScope: { principals: ['arn:aws:iam::400000000002:user/operator'] }
+    },
+    expected: {
+      who: [
+        {
+          principal: 'arn:aws:iam::400000000002:user/operator',
+          service: 'lambda',
+          action: 'GetProvisionedConcurrencyConfig',
+          level: 'read',
+          resourceType: 'function alias'
+        }
+      ]
+    }
+  },
+  {
+    name: 'Lambda wildcard qualifier uses matching parent function tags',
+    data: '3',
+    request: {
+      resource: 'arn:aws:lambda:us-east-1:400000000002:function:tag-test-match:*',
+      actions: ['lambda:GetProvisionedConcurrencyConfig'],
+      principalScope: { principals: ['arn:aws:iam::400000000002:user/operator'] }
+    },
+    expected: {
+      who: [
+        {
+          principal: 'arn:aws:iam::400000000002:user/operator',
+          service: 'lambda',
+          action: 'GetProvisionedConcurrencyConfig',
+          level: 'read',
+          allowedPatterns: [
+            {
+              pattern: 'arn:aws:lambda:us-east-1:400000000002:function:tag-test-*:*',
+              resourceType: 'function alias'
+            },
+            {
+              pattern: 'arn:aws:lambda:us-east-1:400000000002:function:tag-test-*:*',
+              resourceType: 'function version'
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    name: 'Lambda wildcard function name leaves parent tags conditional',
+    data: '3',
+    request: {
+      resource: 'arn:aws:lambda:us-east-1:400000000002:function:tag-test-*:*',
+      actions: ['lambda:GetProvisionedConcurrencyConfig'],
+      principalScope: { principals: ['arn:aws:iam::400000000002:user/operator'] }
+    },
+    expected: {
+      who: [
+        {
+          principal: 'arn:aws:iam::400000000002:user/operator',
+          service: 'lambda',
+          action: 'GetProvisionedConcurrencyConfig',
+          level: 'read',
+          allowedPatterns: [
+            {
+              pattern: 'arn:aws:lambda:us-east-1:400000000002:function:tag-test-*:*',
+              resourceType: 'function alias',
+              conditions: {
+                conditionType: 'condition',
+                op: 'StringEquals',
+                key: 'aws:ResourceTag/Owner',
+                values: ['team'],
+                sources: [
+                  {
+                    effect: 'Allow',
+                    policyIdentifier: 'arn:aws:iam::400000000002:user/operator#Operator',
+                    policyType: 'identity',
+                    statementIndex: 3
+                  }
+                ]
+              },
+              ignoredConditions: {
+                identity: {
+                  allow: [{ op: 'StringEquals', key: 'aws:ResourceTag/Owner', values: ['team'] }]
+                }
+              }
+            },
+            {
+              pattern: 'arn:aws:lambda:us-east-1:400000000002:function:tag-test-*:*',
+              resourceType: 'function version',
+              conditions: {
+                conditionType: 'condition',
+                op: 'StringEquals',
+                key: 'aws:ResourceTag/Owner',
+                values: ['team'],
+                sources: [
+                  {
+                    effect: 'Allow',
+                    policyIdentifier: 'arn:aws:iam::400000000002:user/operator#Operator',
+                    policyType: 'identity',
+                    statementIndex: 3
+                  }
+                ]
+              },
+              ignoredConditions: {
+                identity: {
+                  allow: [{ op: 'StringEquals', key: 'aws:ResourceTag/Owner', values: ['team'] }]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    name: 'Lambda unknown parent tags leave a conditional grant',
+    data: '3',
+    request: {
+      resource: 'arn:aws:lambda:us-east-1:400000000002:function:tag-test-unknown:1',
+      actions: ['lambda:GetProvisionedConcurrencyConfig'],
+      principalScope: { principals: ['arn:aws:iam::400000000002:user/operator'] }
+    },
+    expected: {
+      who: [
+        {
+          principal: 'arn:aws:iam::400000000002:user/operator',
+          service: 'lambda',
+          action: 'GetProvisionedConcurrencyConfig',
+          level: 'read',
+          resourceType: 'function version',
+          conditions: {
+            conditionType: 'condition',
+            op: 'StringEquals',
+            key: 'aws:ResourceTag/Owner',
+            values: ['team'],
+            sources: [
+              {
+                effect: 'Allow',
+                policyIdentifier: 'arn:aws:iam::400000000002:user/operator#Operator',
+                policyType: 'identity',
+                statementIndex: 3
+              }
+            ]
+          },
+          ignoredConditions: {
+            identity: {
+              allow: [{ op: 'StringEquals', key: 'aws:ResourceTag/Owner', values: ['team'] }]
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    name: 'Lambda version denies nonmatching parent function tags',
+    data: '3',
+    request: {
+      resource: 'arn:aws:lambda:us-east-1:400000000002:function:tag-test-other:1',
+      actions: ['lambda:GetProvisionedConcurrencyConfig'],
+      principalScope: { principals: ['arn:aws:iam::400000000002:user/operator'] }
+    },
+    expected: { who: [] }
+  },
+  {
+    name: 'Lambda alias denies nonmatching parent function tags',
+    data: '3',
+    request: {
+      resource: 'arn:aws:lambda:us-east-1:400000000002:function:tag-test-other:live',
+      actions: ['lambda:GetProvisionedConcurrencyConfig'],
+      principalScope: { principals: ['arn:aws:iam::400000000002:user/operator'] }
+    },
+    expected: { who: [] }
+  },
+  {
+    name: 'Lambda version denies absent parent function tags',
+    data: '3',
+    request: {
+      resource: 'arn:aws:lambda:us-east-1:400000000002:function:tag-test-empty:1',
+      actions: ['lambda:GetProvisionedConcurrencyConfig'],
+      principalScope: { principals: ['arn:aws:iam::400000000002:user/operator'] }
+    },
+    expected: { who: [] }
+  },
+  {
+    name: 'Lambda alias denies absent parent function tags',
+    data: '3',
+    request: {
+      resource: 'arn:aws:lambda:us-east-1:400000000002:function:tag-test-empty:live',
+      actions: ['lambda:GetProvisionedConcurrencyConfig'],
+      principalScope: { principals: ['arn:aws:iam::400000000002:user/operator'] }
+    },
+    expected: { who: [] }
+  },
+  {
+    name: 'Lambda wildcard qualifier denies nonmatching parent function tags',
+    data: '3',
+    request: {
+      resource: 'arn:aws:lambda:us-east-1:400000000002:function:tag-test-other:*',
+      actions: ['lambda:GetProvisionedConcurrencyConfig'],
+      principalScope: { principals: ['arn:aws:iam::400000000002:user/operator'] }
+    },
+    expected: { who: [] }
+  },
+  {
+    name: 'Lambda wildcard qualifier denies absent parent function tags',
+    data: '3',
+    request: {
+      resource: 'arn:aws:lambda:us-east-1:400000000002:function:tag-test-empty:*',
+      actions: ['lambda:GetProvisionedConcurrencyConfig'],
+      principalScope: { principals: ['arn:aws:iam::400000000002:user/operator'] }
+    },
+    expected: { who: [] }
+  },
+  {
+    name: 'Lambda explicit empty tags override matching parent tags',
+    data: '3',
+    request: {
+      resource: 'arn:aws:lambda:us-east-1:400000000002:function:tag-test-match:live',
+      actions: ['lambda:GetProvisionedConcurrencyConfig'],
+      principalScope: { principals: ['arn:aws:iam::400000000002:user/operator'] },
+      resourceTags: {}
+    },
+    expected: { who: [] }
+  },
+  {
+    name: 'Lambda explicit matching tags override nonmatching parent tags',
+    data: '3',
+    request: {
+      resource: 'arn:aws:lambda:us-east-1:400000000002:function:tag-test-other:live',
+      actions: ['lambda:GetProvisionedConcurrencyConfig'],
+      principalScope: { principals: ['arn:aws:iam::400000000002:user/operator'] },
+      resourceTags: { Owner: 'team' }
+    },
+    expected: {
+      who: [
+        {
+          principal: 'arn:aws:iam::400000000002:user/operator',
+          service: 'lambda',
+          action: 'GetProvisionedConcurrencyConfig',
+          level: 'read',
+          resourceType: 'function alias'
+        }
+      ]
+    }
+  },
+  {
     name: 'explicit matching S3 bucket tags allow the ABAC role',
     data: '1',
     request: {
