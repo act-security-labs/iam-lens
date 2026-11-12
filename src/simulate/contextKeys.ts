@@ -89,6 +89,28 @@ export const RESOURCE_TAG_KEY_PATTERNS = {
 } as const
 
 const serviceResourceTagKeyPrefix = /^(?!aws:)[a-z0-9-]+:resourcetag\//i
+const qualifiedLambdaFunctionArnPattern =
+  /^(arn:[^:*?]+:lambda:[^:*?]+:[^:*?]+:function:[^:*?]+):[^:]+$/i
+
+/**
+ * Find the collected resource whose tags apply to a request.
+ *
+ * @param resourceArn requested resource ARN or pattern
+ * @returns the bucket ARN for S3 objects, the parent function ARN for qualified Lambda
+ *   resources with a concrete parent, or the original ARN for other resources
+ */
+function getResourceArnForTags(resourceArn: string): string {
+  if (isS3BucketOrObjectArn(resourceArn)) {
+    return bucketArn(resourceArn)
+  }
+
+  const lambdaFunction = qualifiedLambdaFunctionArnPattern.exec(resourceArn)
+  if (lambdaFunction) {
+    return lambdaFunction[1]
+  }
+
+  return resourceArn
+}
 
 export const CONTEXT_KEYS = {
   assumedRoot: 'aws:AssumedRoot',
@@ -316,7 +338,7 @@ export async function createContextKeys(
     resourceTagsAreKnown = true
   } else if (simulationRequest.resourceArn && options.includeResourceMetadata !== false) {
     const collected = await collectClient.getTagsForResource(
-      isBucket ? bucketArn(simulationRequest.resourceArn) : simulationRequest.resourceArn,
+      getResourceArnForTags(simulationRequest.resourceArn),
       simulationRequest.resourceAccount!
     )
     resourceTags = collected.tags

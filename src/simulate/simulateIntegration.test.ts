@@ -31,6 +31,166 @@ const simulateIntegrationTest: {
   expectedPatterns?: { pattern: string; result: EvaluationResult }[]
 }[] = [
   {
+    name: 'Lambda version uses matching parent function tags',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:lambda:us-east-1:400000000002:function:tag-test-match:1',
+      action: 'lambda:GetProvisionedConcurrencyConfig',
+      principal: 'arn:aws:iam::400000000002:user/operator',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'Allowed'
+  },
+  {
+    name: 'Lambda alias uses matching parent function tags',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:lambda:us-east-1:400000000002:function:tag-test-match:live',
+      action: 'lambda:GetProvisionedConcurrencyConfig',
+      principal: 'arn:aws:iam::400000000002:user/operator',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed'
+  },
+  {
+    name: 'Lambda wildcard qualifier uses matching parent function tags',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:lambda:us-east-1:400000000002:function:tag-test-match:*',
+      action: 'lambda:GetProvisionedConcurrencyConfig',
+      principal: 'arn:aws:iam::400000000002:user/operator',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed'
+  },
+  {
+    name: 'Lambda unknown parent tags leave a conditional grant',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:lambda:us-east-1:400000000002:function:tag-test-unknown:1',
+      action: 'lambda:GetProvisionedConcurrencyConfig',
+      principal: 'arn:aws:iam::400000000002:user/operator',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedConditions: {
+      conditionType: 'condition',
+      op: 'StringEquals',
+      key: 'aws:ResourceTag/Owner',
+      values: ['team'],
+      sources: [
+        {
+          effect: 'Allow',
+          policyIdentifier: 'arn:aws:iam::400000000002:user/operator#Operator',
+          policyType: 'identity',
+          statementIndex: 3
+        }
+      ]
+    }
+  },
+  {
+    name: 'Lambda version denies nonmatching parent function tags',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:lambda:us-east-1:400000000002:function:tag-test-other:1',
+      action: 'lambda:GetProvisionedConcurrencyConfig',
+      principal: 'arn:aws:iam::400000000002:user/operator',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ImplicitlyDenied'
+  },
+  {
+    name: 'Lambda alias denies nonmatching parent function tags',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:lambda:us-east-1:400000000002:function:tag-test-other:live',
+      action: 'lambda:GetProvisionedConcurrencyConfig',
+      principal: 'arn:aws:iam::400000000002:user/operator',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'ImplicitlyDenied'
+  },
+  {
+    name: 'Lambda wildcard qualifier denies nonmatching parent function tags',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:lambda:us-east-1:400000000002:function:tag-test-other:*',
+      action: 'lambda:GetProvisionedConcurrencyConfig',
+      principal: 'arn:aws:iam::400000000002:user/operator',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ImplicitlyDenied'
+  },
+  {
+    name: 'Lambda version denies absent parent function tags',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:lambda:us-east-1:400000000002:function:tag-test-empty:1',
+      action: 'lambda:GetProvisionedConcurrencyConfig',
+      principal: 'arn:aws:iam::400000000002:user/operator',
+      customContextKeys: {},
+      simulationMode: 'Strict'
+    },
+    expected: 'ImplicitlyDenied'
+  },
+  {
+    name: 'Lambda alias denies absent parent function tags',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:lambda:us-east-1:400000000002:function:tag-test-empty:live',
+      action: 'lambda:GetProvisionedConcurrencyConfig',
+      principal: 'arn:aws:iam::400000000002:user/operator',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ImplicitlyDenied'
+  },
+  {
+    name: 'Lambda wildcard qualifier denies absent parent function tags',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:lambda:us-east-1:400000000002:function:tag-test-empty:*',
+      action: 'lambda:GetProvisionedConcurrencyConfig',
+      principal: 'arn:aws:iam::400000000002:user/operator',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ImplicitlyDenied'
+  },
+  {
+    name: 'Lambda explicit empty tags override matching parent tags',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:lambda:us-east-1:400000000002:function:tag-test-match:1',
+      action: 'lambda:GetProvisionedConcurrencyConfig',
+      principal: 'arn:aws:iam::400000000002:user/operator',
+      customContextKeys: {},
+      resourceTags: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ImplicitlyDenied'
+  },
+  {
+    name: 'Lambda explicit matching tags override nonmatching parent tags',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:lambda:us-east-1:400000000002:function:tag-test-other:1',
+      action: 'lambda:GetProvisionedConcurrencyConfig',
+      principal: 'arn:aws:iam::400000000002:user/operator',
+      customContextKeys: {},
+      resourceTags: { Owner: 'team' },
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed'
+  },
+  {
     name: 'explicit matching resource tags allow an uncollected secret',
     data: '3',
     request: {
