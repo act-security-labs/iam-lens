@@ -270,6 +270,46 @@ const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
     }
   },
   {
+    name: 'Lambda durable execution keeps its unknown resource tags conditional',
+    data: '3',
+    request: {
+      resource:
+        'arn:aws:lambda:us-east-1:400000000002:function:tag-test-match:1/durable-execution/example/00000000-0000-4000-8000-000000000001',
+      actions: ['lambda:GetDurableExecution'],
+      principalScope: { principals: ['arn:aws:iam::400000000002:user/operator'] }
+    },
+    expected: {
+      who: [
+        {
+          principal: 'arn:aws:iam::400000000002:user/operator',
+          service: 'lambda',
+          action: 'GetDurableExecution',
+          level: 'read',
+          resourceType: 'durable execution',
+          conditions: {
+            conditionType: 'condition',
+            op: 'StringEquals',
+            key: 'aws:ResourceTag/Owner',
+            values: ['team'],
+            sources: [
+              {
+                effect: 'Allow',
+                policyIdentifier: 'arn:aws:iam::400000000002:user/operator#Operator',
+                policyType: 'identity',
+                statementIndex: 3
+              }
+            ]
+          },
+          ignoredConditions: {
+            identity: {
+              allow: [{ op: 'StringEquals', key: 'aws:ResourceTag/Owner', values: ['team'] }]
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
     name: 'Lambda unknown parent tags leave a conditional grant',
     data: '3',
     request: {

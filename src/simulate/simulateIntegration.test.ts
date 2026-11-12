@@ -67,6 +67,33 @@ const simulateIntegrationTest: {
     expected: 'Allowed'
   },
   {
+    name: 'Lambda durable execution keeps its unknown resource tags conditional',
+    data: '3',
+    request: {
+      resourceArn:
+        'arn:aws:lambda:us-east-1:400000000002:function:tag-test-match:1/durable-execution/example/00000000-0000-4000-8000-000000000001',
+      action: 'lambda:GetDurableExecution',
+      principal: 'arn:aws:iam::400000000002:user/operator',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedConditions: {
+      conditionType: 'condition',
+      op: 'StringEquals',
+      key: 'aws:ResourceTag/Owner',
+      values: ['team'],
+      sources: [
+        {
+          effect: 'Allow',
+          policyIdentifier: 'arn:aws:iam::400000000002:user/operator#Operator',
+          policyType: 'identity',
+          statementIndex: 3
+        }
+      ]
+    }
+  },
+  {
     name: 'Lambda unknown parent tags leave a conditional grant',
     data: '3',
     request: {
