@@ -1,3 +1,10 @@
+## [0.1.199](https://github.com/act-security-labs/iam-lens/compare/v0.1.198...v0.1.199) (2026-11-12)
+
+
+### Bug Fixes
+
+* use parent function tags for qualified Lambda resources ([#254](https://github.com/act-security-labs/iam-lens/issues/254)) ([f2eb2ee](https://github.com/act-security-labs/iam-lens/commit/f2eb2ee0ad7a0945abbc070952987848a0080614))
+
 ## [0.1.198](https://github.com/act-security-labs/iam-lens/compare/v0.1.197...v0.1.198) (2026-11-11)
 
 
