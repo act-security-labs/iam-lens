@@ -1,3 +1,10 @@
+## [0.1.200](https://github.com/act-security-labs/iam-lens/compare/v0.1.199...v0.1.200) (2026-11-12)
+
+
+### Bug Fixes
+
+* preserve durable execution tag uncertainty ([#255](https://github.com/act-security-labs/iam-lens/issues/255)) ([701a359](https://github.com/act-security-labs/iam-lens/commit/701a359f85bc3bc0494389477156fe12987685b1))
+
 ## [0.1.199](https://github.com/act-security-labs/iam-lens/compare/v0.1.198...v0.1.199) (2026-11-12)
 
 
