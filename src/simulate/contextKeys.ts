@@ -90,7 +90,7 @@ export const RESOURCE_TAG_KEY_PATTERNS = {
 
 const serviceResourceTagKeyPrefix = /^(?!aws:)[a-z0-9-]+:resourcetag\//i
 const qualifiedLambdaFunctionArnPattern =
-  /^(arn:[^:*?]+:lambda:[^:*?]+:[^:*?]+:function:[^:*?]+):[^:]+$/i
+  /^(arn:[^:*?]+:lambda:[^:*?]+:[^:*?]+:function:[^:*?]+):[^:/]+$/i
 
 /**
  * Find the collected resource whose tags apply to a request.
