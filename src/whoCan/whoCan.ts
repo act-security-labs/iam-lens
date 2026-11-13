@@ -25,6 +25,8 @@ import {
 } from '@actsecurity/iam-simulate'
 import {
   equalsIgnoreCase,
+  isCloudFrontIdentityArn,
+  isCloudFrontOriginAccessUserArn,
   mostSpecificMatchingResourceTypePatterns,
   splitArnParts
 } from '@actsecurity/iam-utils'
@@ -315,6 +317,7 @@ export interface WhoCanResponse {
   accountsNotFound: string[]
   organizationsNotFound: string[]
   organizationalUnitsNotFound: string[]
+  /** Principals from the resource policy that could not be found in the collected data. */
   principalsNotFound: string[]
   denyDetails?: WhoCanDenyDetail[] | undefined
 }
@@ -658,12 +661,14 @@ function mayAllowAnonymous(statement: Statement): boolean {
  * @param resourcePolicy The resource policy document to inspect.
  * @param resourceAccount The account ID that owns the resource, when known.
  * @param collectClient The collect client used to resolve canonical principal ARNs.
+ * @param oaiPartition Partition to enumerate OAIs for an S3 request, when applicable.
  * @returns The accounts, principals, organizations, and related flags to consider for whoCan.
  */
 export async function accountsToCheckBasedOnResourcePolicy(
   resourcePolicy: any,
   resourceAccount: string | undefined,
-  collectClient: IamCollectClient
+  collectClient: IamCollectClient,
+  oaiPartition?: string
 ): Promise<AccountsToCheck> {
   const accountsToCheck: AccountsToCheck = {
     allAccounts: false,
@@ -680,11 +685,13 @@ export async function accountsToCheckBasedOnResourcePolicy(
   }
 
   const policy = loadPolicy(resourcePolicy)
+  let enumerateOais = false
   for (const statement of policy.statements()) {
     if (mayAllowAnonymous(statement)) {
       accountsToCheck.checkAnonymous = true
     }
     if (statement.isAllow() && statement.isNotPrincipalStatement()) {
+      enumerateOais = true
       accountsToCheck.allAccounts = true
       accountsToCheck.checkAllFromResourceAccount = true
       accountsToCheck.resourceAccountTrustedByPolicy = true
@@ -719,6 +726,7 @@ export async function accountsToCheckBasedOnResourcePolicy(
           continue
         }
 
+        enumerateOais = true
         const specificOrgs: string[] = []
         const specificOus: string[] = []
         const specificAccounts: string[] = []
@@ -852,6 +860,11 @@ export async function accountsToCheckBasedOnResourcePolicy(
     }
   }
 
+  if (enumerateOais && oaiPartition) {
+    accountsToCheck.specificPrincipals.push(
+      ...(await collectClient.allCloudFrontOriginAccessIdentityArns(oaiPartition))
+    )
+  }
   return accountsToCheck
 }
 
@@ -874,7 +887,11 @@ async function resolveResourcePolicyPrincipalArn(
   if (!principalArn.startsWith('arn:')) {
     return principalArn
   }
-
+  if (isCloudFrontIdentityArn(principalArn) || isCloudFrontOriginAccessUserArn(principalArn)) {
+    return (
+      (await collectClient.getCloudFrontOriginAccessIdentity(principalArn))?.arn ?? principalArn
+    )
+  }
   return (await collectClient.resolvePrincipalArn(principalArn)) ?? principalArn
 }
 

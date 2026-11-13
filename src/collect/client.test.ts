@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { makePrincipalIndex } from '../principalIndex/makePrincipalIndex.js'
 import { saveGroup, saveManagedPolicy, saveRole, saveUser } from '../utils/testUtils.js'
+import { IamCollectClient } from './client.js'
 import { testStore } from './inMemoryClient.js'
 
 const fullAccessPolicy = {
@@ -48,6 +49,144 @@ const extraSCPs = [1, 2, 3, 4, 5].map((i) => ({
 }))
 
 describe('IamCollectClient', () => {
+  describe('getCloudFrontOriginAccessIdentity', () => {
+    it('uses a valid OAI account index without scanning accounts', async () => {
+      //Given an indexed OAI and matching collected metadata
+      const { store, client } = testStore()
+      const accountId = '123456789012'
+      const arn = `arn:aws:cloudfront::${accountId}:origin-access-identity/E123`
+      await store.saveResourceMetadata(accountId, arn, 'metadata', {
+        arn,
+        s3CanonicalUserId: 'canonical'
+      })
+      const index = await store.getIndex('cloudfront-oai-to-accounts', {})
+      await store.saveIndex('cloudfront-oai-to-accounts', { E123: accountId }, index.lockId)
+      const accountScan = vi.spyOn(client, 'allAccounts')
+
+      //When the policy-user ARN is resolved
+      const result = await client.getCloudFrontOriginAccessIdentity(
+        'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E123'
+      )
+
+      //Then the indexed owner is validated against metadata without scanning
+      expect(result).toEqual({
+        arn,
+        originAccessUserArn: 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E123',
+        accountId,
+        s3CanonicalUserId: 'canonical'
+      })
+      expect(accountScan).not.toHaveBeenCalled()
+    })
+
+    it('does not scan accounts when the indexed owner is stale', async () => {
+      //Given an index pointing at an account without the identity
+      const { store, client } = testStore()
+      const accountId = '123456789012'
+      const arn = `arn:aws:cloudfront::${accountId}:origin-access-identity/E123`
+      await store.saveAccountMetadata(accountId, 'metadata', { accountId })
+      await store.saveResourceMetadata(accountId, arn, 'metadata', { arn })
+      const index = await store.getIndex('cloudfront-oai-to-accounts', {})
+      await store.saveIndex('cloudfront-oai-to-accounts', { E123: '999999999999' }, index.lockId)
+      const accountScan = vi.spyOn(client, 'allAccounts')
+
+      //When resolving the OAI
+      const result = await client.getCloudFrontOriginAccessIdentity(
+        'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E123'
+      )
+
+      //Then it does not use stale metadata or scan accounts
+      expect(result).toBeUndefined()
+      expect(accountScan).not.toHaveBeenCalled()
+    })
+
+    it('resolves either OAI ARN through the collected owning account', async () => {
+      const { store, client } = testStore()
+      const accountId = '123456789012'
+      const arn = `arn:aws:cloudfront::${accountId}:origin-access-identity/E123`
+      const policyArn = 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E123'
+      await store.saveAccountMetadata(accountId, 'metadata', { accountId })
+      await store.saveResourceMetadata(accountId, arn, 'metadata', {
+        arn,
+        s3CanonicalUserId: 'canonical-id'
+      })
+      const index = await store.getIndex('cloudfront-oai-to-accounts', {})
+      await store.saveIndex('cloudfront-oai-to-accounts', { E123: accountId }, index.lockId)
+      const expected = {
+        arn,
+        originAccessUserArn: policyArn,
+        accountId,
+        s3CanonicalUserId: 'canonical-id'
+      }
+      expect(await client.getCloudFrontOriginAccessIdentity(arn)).toEqual(expected)
+      expect(await client.allCloudFrontOriginAccessIdentityArns('aws')).toEqual([arn])
+      expect(await client.getCloudFrontOriginAccessIdentity(policyArn)).toEqual(expected)
+      expect(
+        await client.getCloudFrontOriginAccessIdentity(policyArn.replace('E123', 'E999'))
+      ).toBeUndefined()
+    })
+
+    it('requires an indexed owner for both ARN forms and rejects a different resource owner', async () => {
+      const { store, client } = testStore()
+      const accountId = '123456789012'
+      const arn = `arn:aws:cloudfront::${accountId}:origin-access-identity/E123`
+      const policyArn = 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E123'
+      await store.saveResourceMetadata(accountId, arn, 'metadata', { arn })
+      expect(await client.getCloudFrontOriginAccessIdentity(arn)).toBeUndefined()
+      expect(await client.getCloudFrontOriginAccessIdentity(policyArn)).toBeUndefined()
+
+      // Use a new client to avoid the cached missing index.
+      const index = await store.getIndex('cloudfront-oai-to-accounts', {})
+      await store.saveIndex('cloudfront-oai-to-accounts', { E123: accountId }, index.lockId)
+      const indexedClient = new IamCollectClient(store)
+      expect(await indexedClient.getCloudFrontOriginAccessIdentity(arn)).toEqual({
+        arn,
+        originAccessUserArn: policyArn,
+        accountId,
+        s3CanonicalUserId: undefined
+      })
+      expect(
+        await indexedClient.getCloudFrontOriginAccessIdentity(
+          arn.replace(accountId, '999999999999')
+        )
+      ).toBeUndefined()
+    })
+
+    it('returns the origin access user ARN in the identity partition', async () => {
+      const { store, client } = testStore()
+      const accountId = '123456789012'
+      const arn = `arn:aws-us-gov:cloudfront::${accountId}:origin-access-identity/E123`
+      const policyArn = 'arn:aws-us-gov:iam::cloudfront:user/CloudFront Origin Access Identity E123'
+      await store.saveResourceMetadata(accountId, arn, 'metadata', { arn })
+      const index = await store.getIndex('cloudfront-oai-to-accounts', {})
+      await store.saveIndex('cloudfront-oai-to-accounts', { E123: accountId }, index.lockId)
+      expect(await client.getCloudFrontOriginAccessIdentity(arn)).toEqual({
+        arn,
+        originAccessUserArn: policyArn,
+        accountId,
+        s3CanonicalUserId: undefined
+      })
+      expect(await client.getCloudFrontOriginAccessIdentity(policyArn)).toEqual({
+        arn,
+        originAccessUserArn: policyArn,
+        accountId,
+        s3CanonicalUserId: undefined
+      })
+    })
+
+    it('uses only indexed identities and does not enumerate accounts', async () => {
+      const { store, client } = testStore()
+      const index = await store.getIndex('cloudfront-oai-to-accounts', {})
+      await store.saveIndex('cloudfront-oai-to-accounts', { E123: '123456789012' }, index.lockId)
+      const accountScan = vi.spyOn(client, 'allAccounts')
+      const resourceScan = vi.spyOn(client, 'listResources')
+      expect(await client.allCloudFrontOriginAccessIdentityArns('aws-us-gov')).toEqual([
+        'arn:aws-us-gov:cloudfront::123456789012:origin-access-identity/E123'
+      ])
+      expect(accountScan).not.toHaveBeenCalled()
+      expect(resourceScan).not.toHaveBeenCalled()
+    })
+  })
+
   describe('getRegionForBucket', () => {
     it('returns an unknown region when stored bucket metadata is null', async () => {
       // Given a bucket with null metadata

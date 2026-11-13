@@ -29,6 +29,57 @@ describe('contextValue', () => {
 })
 
 describe('createContextKeys', () => {
+  it('derives only observed principal context for a CloudFront OAI', async () => {
+    const principal = 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E123'
+    const { contextKeys } = await createContextKeys(
+      testStore().client,
+      { ...defaultSimulationRequest, principal },
+      's3',
+      {}
+    )
+    expect(contextKeys['aws:PrincipalArn']).toBe(principal)
+    expect(contextKeys['aws:PrincipalIsAWSService']).toBe('false')
+    expect(contextKeys['aws:PrincipalAccount']).toBe('__iam_lens_unknown__')
+    expect(contextKeys['aws:PrincipalType']).toBe('__iam_lens_unknown__')
+    expect(contextKeys['aws:userid']).toBe('__iam_lens_unknown__')
+    expect(contextKeys['aws:username']).toBeUndefined()
+  })
+
+  it('adds Discovery placeholders for OAI keys known to be present', async () => {
+    //Given an OAI request with unknown values for keys observed to be present
+    const principal = 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E123'
+    const request = { ...defaultSimulationRequest, principal, simulationMode: 'Discovery' as const }
+
+    //When generating the context
+    const { contextKeys } = await createContextKeys(testStore().client, request, 's3', {})
+
+    //Then presence is represented without inventing authoritative values
+    expect(contextKeys['aws:PrincipalAccount']).toBe('__iam_lens_unknown__')
+    expect(contextKeys['aws:PrincipalType']).toBe('__iam_lens_unknown__')
+    expect(contextKeys['aws:userid']).toBe('__iam_lens_unknown__')
+    expect(contextKeys['aws:username']).toBeUndefined()
+    expect(contextKeys['aws:PrincipalArn']).toBe(principal)
+    expect(contextKeys['aws:PrincipalIsAWSService']).toBe('false')
+  })
+
+  it('uses caller-supplied OAI context values instead of Strict placeholders', async () => {
+    const principal = 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E123'
+    const overrides = {
+      'AWS:principalaccount': '123456789012',
+      'aws:PrincipalType': 'User',
+      'aws:userid': 'actual-user-id'
+    }
+    const { contextKeys } = await createContextKeys(
+      testStore().client,
+      { ...defaultSimulationRequest, principal },
+      's3',
+      overrides
+    )
+    expect(contextValue(contextKeys, 'aws:PrincipalAccount')).toBe('123456789012')
+    expect(contextValue(contextKeys, 'aws:PrincipalType')).toBe('User')
+    expect(contextValue(contextKeys, 'aws:userid')).toBe('actual-user-id')
+  })
+
   it('derives the S3 bucket owner only for bucket and object resources', async () => {
     //Given bucket, object, access point, and wildcard-only requests
     const client = testStore().client

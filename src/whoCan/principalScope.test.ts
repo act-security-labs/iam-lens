@@ -1,9 +1,23 @@
 import { describe, expect, it } from 'vitest'
 import { IamCollectClient } from '../collect/client.js'
+import { testStore } from '../collect/inMemoryClient.js'
 import { type WhoCanPrincipalScope } from './whoCan.js'
 import { intersectWithPrincipalScope, resolvePrincipalScope } from './principalScope.js'
 
 describe('resolvePrincipalScope', () => {
+  it('resolves a collected OAI policy ARN to its resource ARN', async () => {
+    const { store, client } = testStore()
+    const arn = 'arn:aws:cloudfront::111111111111:origin-access-identity/E123'
+    const policyArn = 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E123'
+    await store.saveResourceMetadata('111111111111', arn, 'metadata', { arn })
+    const index = await store.getIndex('cloudfront-oai-to-accounts', {})
+    await store.saveIndex('cloudfront-oai-to-accounts', { E123: '111111111111' }, index.lockId)
+
+    const result = await resolvePrincipalScope(client, { principals: [policyArn] })
+
+    expect(result.principals).toEqual(new Set([arn]))
+  })
+
   it('keeps anonymous selection separate from collected-principal resolution', async () => {
     //Given a scope containing both unsigned access and a collected identity
     const principal = 'arn:aws:iam::111111111111:role/Reader'
@@ -142,6 +156,18 @@ describe('resolvePrincipalScope', () => {
 })
 
 describe('intersectWithPrincipalScope', () => {
+  it('keeps OAIs when their owner is already covered by account enumeration', () => {
+    const arn = 'arn:aws:cloudfront::111111111111:origin-access-identity/E123'
+    const result = intersectWithPrincipalScope(
+      ['111111111111'],
+      [arn],
+      false,
+      new Set(['111111111111']),
+      new Set()
+    )
+    expect(result).toEqual({ accounts: ['111111111111'], principals: [arn] })
+  })
+
   it('should use all suggested accounts when allAccountsChecked is true', () => {
     //Given allAccountsChecked is true and suggested accounts
     const scopeAccounts = new Set(['111111111111', '222222222222'])

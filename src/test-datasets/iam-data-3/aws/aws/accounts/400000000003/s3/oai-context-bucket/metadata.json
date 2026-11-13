@@ -1,0 +1,5 @@
+{
+  "arn": "arn:aws:s3:::oai-context-bucket",
+  "name": "oai-context-bucket",
+  "region": "us-east-1"
+}

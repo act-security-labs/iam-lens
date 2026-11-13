@@ -29,6 +29,9 @@ import {
 import {
   isAssumedRoleArn,
   isAwsFoundationModelArn,
+  isCloudFrontIdentityArn,
+  isCloudFrontOriginAccessUserArn,
+  splitArnParts,
   isIamRoleArn,
   isIamUserArn,
   isServicePrincipal
@@ -972,7 +975,10 @@ export class WhoCanProcessor {
     const accountsToCheck = await accountsToCheckBasedOnResourcePolicy(
       resourcePolicy,
       resourceAccount,
-      collectClient
+      collectClient,
+      resource && actions.some((action) => action.toLowerCase().startsWith('s3:'))
+        ? splitArnParts(resource).partition
+        : undefined
     )
 
     if (isFoundationModel) {
@@ -1020,7 +1026,6 @@ export class WhoCanProcessor {
     let accountsForSearch = baseAccounts
     let principalsForSearch = accountsToCheck.specificPrincipals
     let scopeIncludesResourceAccount = true
-
     if (request.principalScope) {
       const resolved = await resolvePrincipalScope(collectClient, request.principalScope)
       const intersection = intersectWithPrincipalScope(
@@ -1163,7 +1168,25 @@ export class WhoCanProcessor {
           try {
             if (state.settled) return
 
-            if (isServicePrincipal(principal)) {
+            if (isCloudFrontIdentityArn(principal) || isCloudFrontOriginAccessUserArn(principal)) {
+              const identity = await collectClient.getCloudFrontOriginAccessIdentity(principal)
+              if (!identity) {
+                state.principalsNotFound.push(principal)
+              } else {
+                for (const action of actions) {
+                  this.enqueueScenario(state, {
+                    simulationVariant: 'authenticated',
+                    resource,
+                    action,
+                    principal: identity.arn,
+                    resultPrincipal: identity.arn,
+                    resourceAccount: scenarioResourceAccount,
+                    discoveryContextKeyConstraints: state.request.discoveryContextKeyConstraints,
+                    collectDenyDetails: !!state.denyDetailsCallback
+                  })
+                }
+              }
+            } else if (isServicePrincipal(principal)) {
               for (const action of actions) {
                 this.enqueueScenario(state, {
                   simulationVariant: 'authenticated',

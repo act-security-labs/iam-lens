@@ -1,6 +1,8 @@
 import {
   convertAssumedRoleArnToRoleArn,
   isAssumedRoleArn,
+  isCloudFrontIdentityArn,
+  isCloudFrontOriginAccessUserArn,
   isIamRoleArn,
   isIamUserArn,
   splitArnParts
@@ -109,6 +111,8 @@ export async function getAllPoliciesForPrincipal(
 ): Promise<PrincipalPolicies> {
   if (
     isServicePrincipal(principalArn) ||
+    isCloudFrontIdentityArn(principalArn) ||
+    isCloudFrontOriginAccessUserArn(principalArn) ||
     isSamlPrincipal(principalArn) ||
     isOidcPrincipal(principalArn)
   ) {
@@ -180,6 +184,9 @@ export async function principalExists(
 ): Promise<boolean> {
   if (isServicePrincipal(principal)) {
     return true
+  }
+  if (isCloudFrontIdentityArn(principal) || isCloudFrontOriginAccessUserArn(principal)) {
+    return (await collectClient.getCloudFrontOriginAccessIdentity(principal)) !== undefined
   }
 
   return collectClient.principalExists(principal)

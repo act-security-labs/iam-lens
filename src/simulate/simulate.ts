@@ -12,8 +12,11 @@ import {
 } from '@actsecurity/iam-simulate'
 import {
   convertAssumedRoleArnToRoleArn,
+  convertCloudFrontIdentityArnToOriginAccessUserArn,
   isAssumedRoleArn,
+  isCloudFrontIdentityArn,
   isAwsFoundationModelArn,
+  isCloudFrontOriginAccessUserArn,
   isIamRoleArn,
   isIamUserArn,
   isRootArn,
@@ -368,6 +371,20 @@ async function simulateRequestInternal(
   collectClient: IamCollectClient
 ): Promise<SimulateRequestResult> {
   const simulationRequest = { ...input }
+  const originalPrincipal = simulationRequest.principal
+  const collectedOai = originalPrincipal
+    ? await collectClient.getCloudFrontOriginAccessIdentity(originalPrincipal)
+    : undefined
+  if (collectedOai) {
+    simulationRequest.principal = collectedOai.originAccessUserArn
+  } else if (originalPrincipal && isCloudFrontIdentityArn(originalPrincipal)) {
+    simulationRequest.principal =
+      convertCloudFrontIdentityArnToOriginAccessUserArn(originalPrincipal)
+  }
+  const isOai =
+    collectedOai !== undefined ||
+    (simulationRequest.principal !== undefined &&
+      isCloudFrontOriginAccessUserArn(simulationRequest.principal))
   const isFoundationModel = isAwsFoundationModelArn(simulationRequest.resourceArn, {
     allowResourceWildcards: true
   })
@@ -392,6 +409,10 @@ async function simulateRequestInternal(
 
   if (variant === 'virtualPrincipal' && !splitArnParts(simulationRequest.principal!).accountId) {
     throw new Error(`Virtual principal ${simulationRequest.principal} must contain an account ID.`)
+  }
+
+  if (actionDetails.isWildcardOnly && isOai) {
+    throw new Error('CloudFront OAI simulations do not support wildcard-only actions.')
   }
 
   if (
@@ -425,6 +446,7 @@ async function simulateRequestInternal(
     !simulationRequest.resourceAccount &&
     isFoundationModel &&
     simulationRequest.principal &&
+    !isOai &&
     !isServicePrincipal(simulationRequest.principal)
   ) {
     simulationRequest.resourceAccount = splitArnParts(simulationRequest.principal).accountId
@@ -460,7 +482,9 @@ async function simulateRequestInternal(
     (variant === 'normal' || variant === 'externalResource' || variant === 'virtualResource') &&
     !isRootArn(simulationRequest.principal ?? '')
   if (requiresCollectedPrincipal) {
-    const principalFound = await principalExists(simulationRequest.principal!, collectClient)
+    const principalFound = isOai
+      ? collectedOai !== undefined
+      : await principalExists(simulationRequest.principal!, collectClient)
     if (!principalFound) {
       throw new Error(
         `Principal ${simulationRequest.principal} does not exist. Use --external-principal to test principals outside your dataset.`
@@ -562,7 +586,6 @@ async function simulateRequestInternal(
     simulationMode: simulationRequest.simulationMode,
     discoveryContextKeyConstraints
   })
-
   return { request, result }
 }
 
@@ -1046,6 +1069,17 @@ export function discoveryConstraintForGeneratedKey(
   }
 
   if (mutablePrincipalTagKeys?.has(keyName)) {
+    return { keyName, presenceIsKnown: true, valueIsKnown: false }
+  }
+
+  if (
+    simulationRequest.principal &&
+    isCloudFrontOriginAccessUserArn(simulationRequest.principal) &&
+    ['aws:PrincipalAccount', 'aws:PrincipalType', 'aws:userid'].some((key) =>
+      equalsIgnoreCase(key, keyName)
+    )
+  ) {
+    // Live probes established presence, but not the values.
     return { keyName, presenceIsKnown: true, valueIsKnown: false }
   }
 

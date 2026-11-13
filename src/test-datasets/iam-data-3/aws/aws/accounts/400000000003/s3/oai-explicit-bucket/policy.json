@@ -1,0 +1,36 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowOai",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E123EXAMPLE"
+      },
+      "Action": "s3:*",
+      "Resource": ["arn:aws:s3:::oai-explicit-bucket", "arn:aws:s3:::oai-explicit-bucket/*"]
+    },
+    {
+      "Sid": "DenyExceptCloudFrontService",
+      "Effect": "Deny",
+      "NotPrincipal": { "Service": "cloudfront.amazonaws.com" },
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::oai-explicit-bucket/notprincipal/*"
+    },
+    {
+      "Sid": "AllowWildcardDuplicate",
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::oai-explicit-bucket/duplicate/*"
+    },
+    {
+      "Sid": "AllowOac",
+      "Effect": "Allow",
+      "Principal": { "Service": "cloudfront.amazonaws.com" },
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::oai-explicit-bucket/*",
+      "Condition": { "StringEquals": { "aws:SourceAccount": "400000000003" } }
+    }
+  ]
+}

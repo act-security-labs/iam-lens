@@ -1,0 +1,5 @@
+{
+  "arn": "arn:aws:s3:::oai-wildcard-bucket",
+  "name": "oai-wildcard-bucket",
+  "region": "us-east-1"
+}
