@@ -134,6 +134,224 @@ interface WhoCanIntegrationTest {
 
 const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
   {
+    name: 'OAI is excluded when scoped to a different account',
+    data: '3',
+    request: {
+      resource: 'arn:aws:s3:::oai-explicit-bucket/object',
+      actions: ['s3:GetObject'],
+      principalScope: { accounts: ['400000000001'] }
+    },
+    expected: { who: [] }
+  },
+  {
+    name: 'OAI action cap excludes an otherwise granted bucket policy write',
+    data: '3',
+    request: {
+      resource: 'arn:aws:s3:::oai-explicit-bucket',
+      actions: ['s3:PutBucketPolicy'],
+      principalScope: {
+        principals: ['arn:aws:cloudfront::400000000002:origin-access-identity/E123EXAMPLE']
+      }
+    },
+    expected: { who: [] }
+  },
+  {
+    name: 'OAI unknown principal type produces a whoCan discovery condition',
+    data: '3',
+    request: {
+      resource: 'arn:aws:s3:::oai-context-bucket/conditional/object',
+      actions: ['s3:GetObject'],
+      principalScope: {
+        principals: ['arn:aws:cloudfront::400000000002:origin-access-identity/E123EXAMPLE']
+      }
+    },
+    expected: {
+      who: [
+        {
+          principal: 'arn:aws:cloudfront::400000000002:origin-access-identity/E123EXAMPLE',
+          service: 's3',
+          action: 'GetObject',
+          level: 'read',
+          resourceType: 'object',
+          conditions: {
+            conditionType: 'condition',
+            op: 'StringEquals',
+            key: 'aws:PrincipalType',
+            values: ['User'],
+            sources: [
+              {
+                effect: 'Allow',
+                policyIdentifier: undefined,
+                policyType: 'resource',
+                statementId: 'UnknownType',
+                statementIndex: 3
+              }
+            ]
+          },
+          ignoredConditions: ignoredAllowCondition(
+            'resource',
+            'StringEquals',
+            'aws:PrincipalType',
+            ['User']
+          )
+        }
+      ]
+    }
+  },
+  {
+    name: 'CloudFront OAC whoCan grant returns the service principal not an OAI',
+    data: '3',
+    request: {
+      resource: 'arn:aws:s3:::oai-explicit-bucket/object',
+      actions: ['s3:GetObject'],
+      principalScope: { principals: ['cloudfront.amazonaws.com'] }
+    },
+    expected: {
+      who: [
+        {
+          principal: 'cloudfront.amazonaws.com',
+          service: 's3',
+          action: 'GetObject',
+          level: 'read',
+          resourceType: 'object'
+        }
+      ]
+    }
+  },
+  {
+    name: 'OAI explicit and wildcard grants yield the principal only once',
+    data: '3',
+    request: {
+      resource: 'arn:aws:s3:::oai-explicit-bucket/duplicate/object',
+      actions: ['s3:GetObject'],
+      principalScope: {
+        principals: ['arn:aws:cloudfront::400000000002:origin-access-identity/E123EXAMPLE']
+      }
+    },
+    expected: {
+      who: [
+        {
+          principal: 'arn:aws:cloudfront::400000000002:origin-access-identity/E123EXAMPLE',
+          service: 's3',
+          action: 'GetObject',
+          level: 'read',
+          resourceType: 'object'
+        }
+      ]
+    }
+  },
+  {
+    name: 'OAI explicit bucket grant is found with and without the action index',
+    data: '3',
+    request: {
+      resource: 'arn:aws:s3:::oai-explicit-bucket/object',
+      actions: ['s3:GetObject'],
+      principalScope: { accounts: ['400000000002'] }
+    },
+    expected: {
+      who: [
+        {
+          principal: 'arn:aws:cloudfront::400000000002:origin-access-identity/E123EXAMPLE',
+          service: 's3',
+          action: 'GetObject',
+          level: 'read',
+          resourceType: 'object'
+        }
+      ]
+    }
+  },
+  {
+    name: 'OAI wildcard bucket grant is found independently of identity policy index',
+    data: '3',
+    request: {
+      resource: 'arn:aws:s3:::oai-wildcard-bucket/object',
+      actions: ['s3:GetObject'],
+      principalScope: { accounts: ['400000000002', '400000000004'] }
+    },
+    expected: {
+      who: [
+        {
+          principal: 'arn:aws:cloudfront::400000000002:origin-access-identity/E123EXAMPLE',
+          service: 's3',
+          action: 'GetObject',
+          level: 'read',
+          resourceType: 'object'
+        },
+        {
+          principal: 'arn:aws:cloudfront::400000000004:origin-access-identity/E456EXAMPLE',
+          service: 's3',
+          action: 'GetObject',
+          level: 'read',
+          resourceType: 'object'
+        }
+      ]
+    }
+  },
+  {
+    name: 'OAI NotPrincipal allow enumerates the indexed identity',
+    data: '3',
+    request: {
+      resource: 'arn:aws:s3:::oai-notprincipal-bucket/object',
+      actions: ['s3:GetObject'],
+      principalScope: { accounts: ['400000000002'] }
+    },
+    expected: {
+      who: [
+        {
+          principal: 'arn:aws:cloudfront::400000000002:origin-access-identity/E123EXAMPLE',
+          service: 's3',
+          action: 'GetObject',
+          level: 'read',
+          resourceType: 'object'
+        }
+      ]
+    }
+  },
+  {
+    name: 'OAI policy ARN scope resolves to the collected resource ARN',
+    data: '3',
+    request: {
+      resource: 'arn:aws:s3:::oai-explicit-bucket/object',
+      actions: ['s3:GetObject'],
+      principalScope: {
+        principals: ['arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E123EXAMPLE']
+      }
+    },
+    expected: {
+      who: [
+        {
+          principal: 'arn:aws:cloudfront::400000000002:origin-access-identity/E123EXAMPLE',
+          service: 's3',
+          action: 'GetObject',
+          level: 'read',
+          resourceType: 'object'
+        }
+      ]
+    }
+  },
+  {
+    name: 'OAI canonical-user deny is not reverse-resolved to an OAI ARN',
+    data: '3',
+    request: {
+      resource: 'arn:aws:s3:::oai-canonical-bucket/object',
+      actions: ['s3:GetObject'],
+      principalScope: {
+        principals: ['arn:aws:cloudfront::400000000002:origin-access-identity/E123EXAMPLE']
+      }
+    },
+    expected: {
+      who: [
+        {
+          principal: 'arn:aws:cloudfront::400000000002:origin-access-identity/E123EXAMPLE',
+          service: 's3',
+          action: 'GetObject',
+          level: 'read',
+          resourceType: 'object'
+        }
+      ]
+    }
+  },
+  {
     name: 'Lambda version uses matching parent function tags',
     data: '3',
     request: {

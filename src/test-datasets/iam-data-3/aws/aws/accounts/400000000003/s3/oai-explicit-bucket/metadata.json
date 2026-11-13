@@ -1,0 +1,5 @@
+{
+  "arn": "arn:aws:s3:::oai-explicit-bucket",
+  "name": "oai-explicit-bucket",
+  "region": "us-east-1"
+}

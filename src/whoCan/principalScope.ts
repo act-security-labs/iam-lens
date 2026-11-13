@@ -1,4 +1,9 @@
-import { isServicePrincipal, splitArnParts } from '@actsecurity/iam-utils'
+import {
+  isCloudFrontIdentityArn,
+  isCloudFrontOriginAccessUserArn,
+  isServicePrincipal,
+  splitArnParts
+} from '@actsecurity/iam-utils'
 import { IamCollectClient } from '../collect/client.js'
 import { type WhoCanPrincipalScope } from './whoCan.js'
 
@@ -22,7 +27,11 @@ export async function resolvePrincipalScope(
   const principals = new Set<string>()
 
   for (const p of scope.principals ?? []) {
-    principals.add(p)
+    if (isCloudFrontOriginAccessUserArn(p)) {
+      principals.add((await client.getCloudFrontOriginAccessIdentity(p))?.arn ?? p)
+    } else {
+      principals.add(p)
+    }
   }
 
   for (const a of scope.accounts ?? []) {
@@ -81,8 +90,8 @@ export function intersectWithPrincipalScope(
       }
     } else {
       const accountId = splitArnParts(p).accountId
-      if (accountId && accountsResultSet.has(accountId)) {
-        // Account loop already covers this principal — skip
+      if (accountId && accountsResultSet.has(accountId) && !isCloudFrontIdentityArn(p)) {
+        // The IAM account loop covers ordinary principals, but not OAIs.
         continue
       }
       if (accountId && scopeAccounts.has(accountId)) {
@@ -105,8 +114,8 @@ export function intersectWithPrincipalScope(
       }
     } else {
       const accountId = splitArnParts(p).accountId
-      if (accountId && accountsResultSet.has(accountId)) {
-        // Account loop already covers this principal — skip
+      if (accountId && accountsResultSet.has(accountId) && !isCloudFrontIdentityArn(p)) {
+        // The IAM account loop covers ordinary principals, but not OAIs.
         continue
       }
       if (resourcePolicyCheckAllAccounts || (accountId && rpAccountSet.has(accountId))) {

@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { IamCollectClient } from '../collect/client.js'
+import { testStore } from '../collect/inMemoryClient.js'
 import {
   type AccountsToCheck,
   accountsToCheckBasedOnResourcePolicy,
@@ -81,6 +82,48 @@ describe('anonymous candidate statements', () => {
     )
     //Then no unsigned scenario is warranted
     expect(result.checkAnonymous).toBe(false)
+  })
+})
+
+describe('OAI candidates from resource policies', () => {
+  it.each([
+    { name: 'wildcard', principal: { Principal: '*' }, enumerates: true },
+    {
+      name: 'NotPrincipal',
+      principal: { NotPrincipal: { AWS: '111111111111' } },
+      enumerates: true
+    },
+    {
+      name: 'explicit OAI',
+      principal: {
+        Principal: { AWS: 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E123' }
+      },
+      enumerates: false
+    },
+    {
+      name: 'canonical user',
+      principal: { Principal: { CanonicalUser: 'a'.repeat(64) } },
+      enumerates: false
+    }
+  ])('selects $name candidates through the policy parser', async ({ principal, enumerates }) => {
+    const { store, client } = testStore()
+    const arn = 'arn:aws:cloudfront::123456789012:origin-access-identity/E123'
+    await store.saveResourceMetadata('123456789012', arn, 'metadata', { arn })
+    const index = await store.getIndex('cloudfront-oai-to-accounts', {})
+    await store.saveIndex('cloudfront-oai-to-accounts', { E123: '123456789012' }, index.lockId)
+    const enumerate = vi.spyOn(client, 'allCloudFrontOriginAccessIdentityArns')
+    const policy = {
+      Statement: [{ Effect: 'Allow', ...principal, Action: 's3:GetObject', Resource: '*' }]
+    }
+
+    const result = await accountsToCheckBasedOnResourcePolicy(policy, '999999999999', client, 'aws')
+
+    expect(enumerate).toHaveBeenCalledTimes(enumerates ? 1 : 0)
+    if (enumerates || ('Principal' in principal && 'AWS' in (principal.Principal as object))) {
+      expect(result.specificPrincipals).toContain(arn)
+    } else {
+      expect(result.specificPrincipals).toEqual(['a'.repeat(64)])
+    }
   })
 })
 

@@ -4,6 +4,7 @@ import {
   actionSupportsAwsResourceInfoContextKeys,
   bucketArn,
   convertAssumedRoleArnToRoleArn,
+  isCloudFrontOriginAccessUserArn,
   isS3BucketOrObjectArn,
   splitArnParts
 } from '@actsecurity/iam-utils'
@@ -222,6 +223,15 @@ export async function createContextKeys(
     if (equalsIgnoreCase(service, 'sqs')) {
       contextKeys['aws:PrincipalAccount'] = 'anonymous'
     }
+  } else if (isCloudFrontOriginAccessUserArn(principal)) {
+    // The OAI policy ARN encodes no owner account; AWS observed this principal as non-service.
+    contextKeys['aws:PrincipalArn'] = principal
+    contextKeys['aws:PrincipalIsAWSService'] = 'false'
+    // These keys are known to be present, but their actual values are unverified.
+    // Discovery constraints mark the placeholder values unknown; Strict evaluates them literally.
+    contextKeys['aws:PrincipalAccount'] = '__iam_lens_unknown__'
+    contextKeys['aws:PrincipalType'] = '__iam_lens_unknown__'
+    contextKeys['aws:userid'] = '__iam_lens_unknown__'
   } else if (isArnPrincipal(principal)) {
     const arnParts = splitArnParts(principal)
     const principalArnForContext =

@@ -1,0 +1,11 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "NotPrincipal": { "AWS": "arn:aws:iam::999999999999:root" },
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::oai-notprincipal-bucket/*"
+    }
+  ]
+}

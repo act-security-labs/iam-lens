@@ -156,6 +156,10 @@ The variants make their assumptions explicit:
 
 Anonymous, external-principal, and external-resource simulations do not support wildcard-only actions. See the full documentation for policy overrides and other details.
 
+Legacy CloudFront origin access identities (OAIs) can be specified by their collected CloudFront resource ARN or policy-user ARN. The `cloudfront-oai-to-accounts` index is required for OAI ARN resolution and `who-can` OAI enumeration; rebuild CloudFront indexes with iam-collect 0.1.236 or later for older datasets. The simulator does not currently correlate an OAI ARN with a `CanonicalUser` policy principal, even when its canonical ID is collected; those policies require additional handling. OAIs have no modeled identity policies; only the simulator's 17 validated S3 actions are eligible, and ACL-only grants are not modeled. Their policy-user ARN does not identify the owner account. Uncollected OAIs cannot be resolved to an owner or canonical user ID.
+
+For OAI requests, Discovery treats `aws:PrincipalAccount`, `aws:PrincipalType`, and `aws:userid` as present with unknown values and returns applicable conditions rather than inventing values; `aws:username` is treated as absent. Strict mode evaluates the known-present keys with the literal placeholder `__iam_lens_unknown__` when no override is supplied. This correctly models presence, but cannot determine the actual value: negated or wildcard conditions can match the placeholder. Supply authoritative context overrides when strict evaluation depends on these values. The simulator cannot correlate an OAI ARN with a `CanonicalUser` principal, so simulations involving such policy entries may be incomplete.
+
 [Full simulate documentation](docs/Simulate.md)
 
 ### `who-can` - Find who can perform an action on a resource
@@ -164,7 +168,7 @@ Anonymous, external-principal, and external-resource simulations do not support 
 iam-lens who-can [options]
 ```
 
-Lists all principals in your IAM data who are allowed to perform one or more specified actions on a resource (or account for wildcard only actions). If applicable it will check the resource policy to find cross-account permissions and AWS service principals. Potentially public resource policies are also simulated for unsigned access, returned as `"principal": "anonymous"`, including wildcard resource patterns.
+Lists all principals in your IAM data who are allowed to perform one or more specified actions on a resource (or account for wildcard only actions). If applicable it will check the resource policy to find cross-account permissions and AWS service principals. Potentially public resource policies are also simulated for unsigned access, returned as `"principal": "anonymous"`, including wildcard resource patterns. Collected OAIs are considered for S3 resource policies independently of the identity-policy action index; results identify them by their CloudFront resource ARN. Explicitly named uncollected OAI principals are reported in `principalsNotFound` rather than assigned an invented owner. `who-can` does not reverse-resolve `CanonicalUser` IDs to OAIs, so canonical-user policy entries are not correlated with OAI ARN candidates.
 
 [Full who-can documentation](docs/WhoCan.md)
 

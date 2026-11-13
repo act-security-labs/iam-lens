@@ -31,6 +31,174 @@ const simulateIntegrationTest: {
   expectedPatterns?: { pattern: string; result: EvaluationResult }[]
 }[] = [
   {
+    name: 'CloudFront OAC service principal retains its distinct bucket-policy grant',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:s3:::oai-explicit-bucket/object',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      principal: 'cloudfront.amazonaws.com',
+      customContextKeys: { 'aws:SourceAccount': '400000000003' },
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedConditions: undefined
+  },
+  {
+    name: 'CloudFront OAC source-account mismatch does not receive the grant',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:s3:::oai-explicit-bucket/object',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      principal: 'cloudfront.amazonaws.com',
+      customContextKeys: { 'aws:SourceAccount': '999999999999' },
+      simulationMode: 'Discovery'
+    },
+    expected: 'ImplicitlyDenied',
+    expectedConditions: undefined
+  },
+  {
+    name: 'OAI resource ARN receives the explicit S3 bucket-policy grant',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:s3:::oai-explicit-bucket/object',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      principal: 'arn:aws:cloudfront::400000000002:origin-access-identity/E123EXAMPLE',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedConditions: undefined
+  },
+  {
+    name: 'OAI policy ARN receives the explicit S3 bucket-policy grant',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:s3:::oai-explicit-bucket/object',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      principal: 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E123EXAMPLE',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedConditions: undefined
+  },
+  {
+    name: 'OAI present and absent context keys satisfy Null conditions',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:s3:::oai-context-bucket/present/object',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      principal: 'arn:aws:cloudfront::400000000002:origin-access-identity/E123EXAMPLE',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedConditions: undefined
+  },
+  {
+    name: 'OAI source context keys are absent in the observed request model',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:s3:::oai-context-bucket/absent-source/object',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      principal: 'arn:aws:cloudfront::400000000002:origin-access-identity/E123EXAMPLE',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedConditions: undefined
+  },
+  {
+    name: 'OAI known PrincipalArn and PrincipalIsAWSService conditions match',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:s3:::oai-context-bucket/principal/object',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      principal: 'arn:aws:cloudfront::400000000002:origin-access-identity/E123EXAMPLE',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedConditions: undefined
+  },
+  {
+    name: 'OAI unknown PrincipalType produces a discovery condition',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:s3:::oai-context-bucket/conditional/object',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      principal: 'arn:aws:cloudfront::400000000002:origin-access-identity/E123EXAMPLE',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedConditions: {
+      conditionType: 'condition',
+      op: 'StringEquals',
+      key: 'aws:PrincipalType',
+      values: ['User'],
+      sources: [
+        {
+          effect: 'Allow',
+          policyIdentifier: undefined,
+          policyType: 'resource',
+          statementId: 'UnknownType',
+          statementIndex: 3
+        }
+      ]
+    }
+  },
+  {
+    name: 'OAI caller PrincipalType override can deny a conditional grant',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:s3:::oai-context-bucket/conditional/object',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      principal: 'arn:aws:cloudfront::400000000002:origin-access-identity/E123EXAMPLE',
+      customContextKeys: { 'aws:PrincipalType': 'Service' },
+      simulationMode: 'Discovery'
+    },
+    expected: 'ImplicitlyDenied',
+    expectedConditions: undefined
+  },
+  {
+    name: 'OAI action cap denies an otherwise granted bucket policy write',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:s3:::oai-explicit-bucket',
+      resourceAccount: undefined,
+      action: 's3:PutBucketPolicy',
+      principal: 'arn:aws:cloudfront::400000000002:origin-access-identity/E123EXAMPLE',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ImplicitlyDenied',
+    expectedConditions: undefined
+  },
+  {
+    name: 'OAI is excluded by the CloudFront service NotPrincipal deny',
+    data: '3',
+    request: {
+      resourceArn: 'arn:aws:s3:::oai-explicit-bucket/notprincipal/object',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      principal: 'arn:aws:cloudfront::400000000002:origin-access-identity/E123EXAMPLE',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed',
+    expectedConditions: undefined
+  },
+  {
     name: 'Lambda version uses matching parent function tags',
     data: '3',
     request: {

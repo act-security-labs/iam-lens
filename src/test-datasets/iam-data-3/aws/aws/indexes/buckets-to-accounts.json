@@ -1,4 +1,9 @@
 {
+  "oai-explicit-bucket": { "accountId": "400000000003", "region": "us-east-1" },
+  "oai-context-bucket": { "accountId": "400000000003", "region": "us-east-1" },
+  "oai-canonical-bucket": { "accountId": "400000000003", "region": "us-east-1" },
+  "oai-notprincipal-bucket": { "accountId": "400000000003", "region": "us-east-1" },
+  "oai-wildcard-bucket": { "accountId": "400000000003", "region": "us-east-1" },
   "region-test-bucket": { "accountId": "400000000003", "region": "eu-west-2" },
   "unknown-region-test-bucket": { "accountId": "400000000003" },
   "conditional-bucket": {

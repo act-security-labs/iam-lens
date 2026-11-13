@@ -15,8 +15,11 @@ import {
 } from '@actsecurity/iam-policy'
 import {
   convertAssumedRoleArnToRoleArn,
+  convertCloudFrontIdentityArnToOriginAccessUserArn,
   equalsIgnoreCase,
   isAssumedRoleArn,
+  isCloudFrontIdentityArn,
+  isCloudFrontOriginAccessUserArn,
   splitArnParts,
   splitSlice
 } from '@actsecurity/iam-utils'
@@ -41,6 +44,16 @@ interface IamUserMetadata {
 
 interface ResourceMetadata {
   arn: string
+}
+
+/** A collected OAI and its owner and optional canonical S3 user ID. */
+export interface CloudFrontOriginAccessIdentity {
+  /** Account-qualified CloudFront resource ARN. */
+  arn: string
+  /** IAM-form ARN used as the origin access identity principal in resource policies. */
+  originAccessUserArn: string
+  accountId: string
+  s3CanonicalUserId?: string
 }
 
 /**
@@ -286,6 +299,54 @@ export class IamCollectClient {
     return this.withCache(cacheKey, async () => {
       return this.storageClient.listAccountIds()
     })
+  }
+
+  /**
+   * Enumerate OAI resource ARNs independently of the identity-policy action index.
+   *
+   * @param partition AWS partition of the indexed identities
+   * @returns all indexed account-owned OAI resource ARNs
+   */
+  async allCloudFrontOriginAccessIdentityArns(partition: string): Promise<string[]> {
+    const index = await this.getIndex<Record<string, string>>('cloudfront-oai-to-accounts', {})
+    return Object.entries(index.data).map(
+      ([id, account]) => `arn:${partition}:cloudfront::${account}:origin-access-identity/${id}`
+    )
+  }
+
+  /**
+   * Resolve a collected OAI resource or policy-user ARN without inventing its owner.
+   *
+   * @param principalArn OAI resource or policy-user ARN
+   * @returns the unique collected identity, or undefined when absent
+   */
+  async getCloudFrontOriginAccessIdentity(
+    principalArn: string
+  ): Promise<CloudFrontOriginAccessIdentity | undefined> {
+    const isResourceArn = isCloudFrontIdentityArn(principalArn)
+    if (!isResourceArn && !isCloudFrontOriginAccessUserArn(principalArn)) {
+      return undefined
+    }
+    const parts = splitArnParts(principalArn)
+    const identityId = isResourceArn ? parts.resourcePath! : parts.resourcePath!.split(' ').at(-1)!
+    const index = await this.getIndex<Record<string, string>>('cloudfront-oai-to-accounts', {})
+    const accountId = Object.hasOwn(index.data, identityId) ? index.data[identityId] : undefined
+    if (!accountId || (isResourceArn && accountId !== parts.accountId)) {
+      return undefined
+    }
+    const identityArn = `arn:${parts.partition}:cloudfront::${accountId}:origin-access-identity/${identityId}`
+    const metadata = await this.storageClient.getResourceMetadata<
+      { arn: string; s3CanonicalUserId?: string } | undefined,
+      undefined
+    >(accountId, identityArn, 'metadata')
+    return metadata?.arn === identityArn
+      ? {
+          arn: identityArn,
+          originAccessUserArn: convertCloudFrontIdentityArnToOriginAccessUserArn(identityArn),
+          accountId,
+          s3CanonicalUserId: metadata.s3CanonicalUserId
+        }
+      : undefined
   }
 
   /**

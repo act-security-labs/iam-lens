@@ -8,6 +8,7 @@ import {
   mergeDiscoveryContextKeyConstraints,
   resultMatchesExpectation,
   simulateExternalResourceRequest,
+  simulateExternalPrincipalRequest,
   simulateRequest,
   simulateVirtualResourceRequest,
   type SimulationRequest,
@@ -15,6 +16,292 @@ import {
 } from './simulate.js'
 
 describe('simulateRequest', () => {
+  it.each([
+    'arn:aws:cloudfront::123456789012:origin-access-identity/E123',
+    'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E123'
+  ])('recognizes an uncollected external OAI %s', async (principal) => {
+    const { client } = testStore()
+    await expect(
+      simulateExternalPrincipalRequest(
+        {
+          simulationMode: 'Discovery',
+          principal,
+          action: 's3:ListAllMyBuckets',
+          resourceAccount: '999999999999',
+          customContextKeys: {}
+        },
+        client
+      )
+    ).rejects.toThrow('CloudFront OAI simulations do not support wildcard-only actions.')
+  })
+
+  it.each(['resource', 'policy'] as const)(
+    'passes a collected OAI %s ARN as a policy-user ARN string',
+    async (form) => {
+      //Given a collected OAI and a resource-policy grant for its policy ARN
+      const { store, client } = testStore()
+      const owner = '123456789012'
+      const resourceArn = `arn:aws:cloudfront::${owner}:origin-access-identity/E123`
+      const policyArn = 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E123'
+      await store.saveAccountMetadata(owner, 'metadata', { accountId: owner })
+      await store.saveResourceMetadata(owner, resourceArn, 'metadata', { arn: resourceArn })
+      const index = await store.getIndex('cloudfront-oai-to-accounts', {})
+      await store.saveIndex('cloudfront-oai-to-accounts', { E123: owner }, index.lockId)
+
+      //When either ARN form is simulated
+      const { request, result } = await simulateExternalResourceRequest(
+        {
+          simulationMode: 'Discovery',
+          principal: form === 'resource' ? resourceArn : policyArn,
+          resourceArn: 'arn:aws:s3:::example-bucket/key',
+          resourceAccount: '999999999999',
+          action: 's3:GetObject',
+          customContextKeys: {},
+          resourcePolicy: {
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Principal: { AWS: policyArn },
+                Action: 's3:GetObject',
+                Resource: '*'
+              }
+            ]
+          }
+        },
+        client
+      )
+
+      //Then the merged simulator sees the policy ARN string and permits the grant
+      expect(request.principal).toBe(policyArn)
+      expect(result.resultType).toBe('single')
+      if (result.resultType !== 'single') {
+        throw new Error('Expected single result')
+      }
+      expect(result.overallResult).toBe('Allowed')
+      expect(result.result.analysis.identityAnalysis.result).toBe('NotApplicable')
+    }
+  )
+
+  it('simulates an OAI when canonical principals belong to other identities', async () => {
+    const { store, client } = testStore()
+    const owner = '123456789012'
+    const arn = `arn:aws:cloudfront::${owner}:origin-access-identity/E123`
+    await store.saveResourceMetadata(owner, arn, 'metadata', {
+      arn,
+      s3CanonicalUserId: 'a'.repeat(64)
+    })
+    const index = await store.getIndex('cloudfront-oai-to-accounts', {})
+    await store.saveIndex('cloudfront-oai-to-accounts', { E123: owner }, index.lockId)
+    const { result } = await simulateExternalResourceRequest(
+      {
+        simulationMode: 'Discovery',
+        principal: arn,
+        resourceArn: 'arn:aws:s3:::example-bucket/key',
+        resourceAccount: '999999999999',
+        action: 's3:GetObject',
+        customContextKeys: {},
+        resourcePolicy: {
+          Version: '2012-10-17',
+          Statement: [
+            { Effect: 'Allow', Principal: '*', Action: 's3:GetObject', Resource: '*' },
+            {
+              Effect: 'Deny',
+              Principal: { CanonicalUser: 'b'.repeat(64) },
+              Action: 's3:GetObject',
+              Resource: '*'
+            }
+          ]
+        }
+      },
+      client
+    )
+    expect(result.overallResult).toBe('Allowed')
+  })
+
+  it('simulates a collected OAI against a collected bucket policy in the normal variant', async () => {
+    const { store, client } = testStore()
+    const owner = '123456789012'
+    const bucketOwner = '999999999999'
+    const oaiArn = `arn:aws:cloudfront::${owner}:origin-access-identity/E123`
+    const policyArn = 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E123'
+    const bucketArn = 'arn:aws:s3:::example-bucket'
+    await store.saveAccountMetadata(owner, 'metadata', { accountId: owner })
+    await store.saveResourceMetadata(owner, oaiArn, 'metadata', { arn: oaiArn })
+    const index = await store.getIndex('cloudfront-oai-to-accounts', {})
+    await store.saveIndex('cloudfront-oai-to-accounts', { E123: owner }, index.lockId)
+    await store.saveResourceMetadata(
+      bucketOwner,
+      bucketArn,
+      'policy',
+      JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Principal: { AWS: policyArn },
+            Action: 's3:GetObject',
+            Resource: `${bucketArn}/*`
+          }
+        ]
+      })
+    )
+    const { result } = await simulateRequest(
+      {
+        simulationMode: 'Discovery',
+        principal: oaiArn,
+        resourceArn: `${bucketArn}/key`,
+        resourceAccount: bucketOwner,
+        action: 's3:GetObject',
+        customContextKeys: {}
+      },
+      client
+    )
+    expect(result.resultType).toBe('single')
+    if (result.resultType !== 'single') {
+      throw new Error('Expected single result')
+    }
+    expect(result.overallResult).toBe('Allowed')
+  })
+
+  it.each([
+    { key: 'aws:PrincipalAccount', nullValue: 'false', expected: 'Allowed' },
+    { key: 'aws:PrincipalType', nullValue: 'false', expected: 'Allowed' },
+    { key: 'aws:userid', nullValue: 'false', expected: 'Allowed' },
+    { key: 'aws:username', nullValue: 'true', expected: 'Allowed' },
+    { key: 'aws:username', nullValue: 'false', expected: 'ImplicitlyDenied' }
+  ] as const)(
+    'uses observed OAI key presence for Null $key=$nullValue',
+    async ({ key, nullValue, expected }) => {
+      const { store, client } = testStore()
+      const owner = '123456789012'
+      const oaiArn = `arn:aws:cloudfront::${owner}:origin-access-identity/E123`
+      await store.saveAccountMetadata(owner, 'metadata', { accountId: owner })
+      await store.saveResourceMetadata(owner, oaiArn, 'metadata', { arn: oaiArn })
+      const index = await store.getIndex('cloudfront-oai-to-accounts', {})
+      await store.saveIndex('cloudfront-oai-to-accounts', { E123: owner }, index.lockId)
+      const { result } = await simulateExternalResourceRequest(
+        {
+          simulationMode: 'Discovery',
+          principal: oaiArn,
+          resourceArn: 'arn:aws:s3:::example-bucket/key',
+          resourceAccount: '999999999999',
+          action: 's3:GetObject',
+          customContextKeys: {},
+          resourcePolicy: {
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Principal: '*',
+                Action: 's3:GetObject',
+                Resource: '*',
+                Condition: { Null: { [key]: nullValue } }
+              }
+            ]
+          }
+        },
+        client
+      )
+      expect(result.resultType).toBe('single')
+      if (result.resultType !== 'single') {
+        throw new Error('Expected single result')
+      }
+      expect(result.overallResult).toBe(expected)
+      expect(result.result.analysis.conditions).toBeUndefined()
+    }
+  )
+
+  it.each(
+    ['aws:PrincipalAccount', 'aws:PrincipalType', 'aws:userid'].flatMap((key) =>
+      [
+        { operator: 'Null', value: 'false', expected: 'Allowed' },
+        { operator: 'Null', value: 'true', expected: 'ImplicitlyDenied' },
+        { operator: 'StringEqualsIfExists', value: '123456789012', expected: 'ImplicitlyDenied' },
+        { operator: 'StringEquals', value: '123456789012', expected: 'ImplicitlyDenied' },
+        { operator: 'StringNotEquals', value: '123456789012', expected: 'Allowed' }
+      ].map((scenario) => ({ key, ...scenario }))
+    )
+  )(
+    'models present unknown OAI $key in Strict mode for $operator $value',
+    async ({ key, operator, value, expected }) => {
+      const { store, client } = testStore()
+      const owner = '123456789012'
+      const arn = `arn:aws:cloudfront::${owner}:origin-access-identity/E123`
+      await store.saveResourceMetadata(owner, arn, 'metadata', { arn })
+      const index = await store.getIndex('cloudfront-oai-to-accounts', {})
+      await store.saveIndex('cloudfront-oai-to-accounts', { E123: owner }, index.lockId)
+      const { result } = await simulateExternalResourceRequest(
+        {
+          simulationMode: 'Strict',
+          principal: arn,
+          resourceArn: 'arn:aws:s3:::example-bucket/key',
+          resourceAccount: '999999999999',
+          action: 's3:GetObject',
+          customContextKeys: {},
+          resourcePolicy: {
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Principal: '*',
+                Action: 's3:GetObject',
+                Resource: '*',
+                Condition: { [operator]: { [key]: value } }
+              }
+            ]
+          }
+        },
+        client
+      )
+      expect(result.overallResult).toBe(expected)
+    }
+  )
+
+  it('preserves an unverified OAI principal context condition in Discovery', async () => {
+    const { store, client } = testStore()
+    const owner = '123456789012'
+    const resourceArn = `arn:aws:cloudfront::${owner}:origin-access-identity/E123`
+    const policyArn = 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E123'
+    await store.saveAccountMetadata(owner, 'metadata', { accountId: owner })
+    await store.saveResourceMetadata(owner, resourceArn, 'metadata', { arn: resourceArn })
+    const index = await store.getIndex('cloudfront-oai-to-accounts', {})
+    await store.saveIndex('cloudfront-oai-to-accounts', { E123: owner }, index.lockId)
+    const { result } = await simulateExternalResourceRequest(
+      {
+        simulationMode: 'Discovery',
+        principal: policyArn,
+        resourceArn: 'arn:aws:s3:::example-bucket/key',
+        resourceAccount: '999999999999',
+        action: 's3:GetObject',
+        customContextKeys: {},
+        resourcePolicy: {
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Principal: { AWS: policyArn },
+              Action: 's3:GetObject',
+              Resource: '*',
+              Condition: { StringEquals: { 'aws:PrincipalType': 'User' } }
+            }
+          ]
+        }
+      },
+      client
+    )
+    expect(result.resultType).toBe('single')
+    if (result.resultType !== 'single') {
+      throw new Error('Expected single result')
+    }
+    expect(result.overallResult).toBe('Allowed')
+    expect(result.result.analysis.conditions).toMatchObject({
+      conditionType: 'condition',
+      key: 'aws:PrincipalType',
+      values: ['User']
+    })
+  })
+
   it.each(['arn:aws:s3:::example-bucket', 'arn:aws:s3:::example-bucket/*'])(
     'evaluates the S3 resource account condition in discovery for %s',
     async (resourceArn) => {
@@ -1399,6 +1686,32 @@ describe('caller-provided Discovery context keys', () => {
         valueIsKnown: true
       }))
     ])
+  })
+
+  it.each([
+    'aws:PrincipalAccount',
+    'aws:PrincipalType',
+    'aws:userid',
+    'AWſ:PrıncıpalAccount',
+    'AWſ:PrıncıpalType',
+    'AWſ:uſerıd'
+  ])('preserves known OAI context presence and unknown value for %s', (keyName) => {
+    const request = {
+      simulationMode: 'Discovery' as const,
+      principal: 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E123',
+      customContextKeys: {}
+    }
+    expect(discoveryConstraintForGeneratedKey(keyName, request)).toEqual({
+      keyName,
+      presenceIsKnown: true,
+      valueIsKnown: false
+    })
+    expect(
+      discoveryConstraintForGeneratedKey(keyName, {
+        ...request,
+        customContextKeys: { [keyName]: 'provided' }
+      })
+    ).toEqual({ keyName, presenceIsKnown: true, valueIsKnown: true })
   })
 
   it('should treat a caller-provided KMS caller account as known', () => {

@@ -1,0 +1,6 @@
+{
+  "arn": "arn:aws:cloudfront::400000000002:origin-access-identity/E123EXAMPLE",
+  "id": "E123EXAMPLE",
+  "name": "E123EXAMPLE",
+  "s3CanonicalUserId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}

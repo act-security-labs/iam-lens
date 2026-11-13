@@ -1,0 +1,49 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "KnownPresent",
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::oai-context-bucket/present/*",
+      "Condition": {
+        "Null": {
+          "aws:PrincipalAccount": "false",
+          "aws:PrincipalType": "false",
+          "aws:userid": "false",
+          "aws:username": "true"
+        }
+      }
+    },
+    {
+      "Sid": "KnownAbsentSource",
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::oai-context-bucket/absent-source/*",
+      "Condition": { "Null": { "aws:SourceArn": "true", "aws:SourceAccount": "true" } }
+    },
+    {
+      "Sid": "UnknownType",
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::oai-context-bucket/conditional/*",
+      "Condition": { "StringEquals": { "aws:PrincipalType": "User" } }
+    },
+    {
+      "Sid": "KnownPrincipal",
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::oai-context-bucket/principal/*",
+      "Condition": {
+        "ArnEquals": {
+          "aws:PrincipalArn": "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E123EXAMPLE"
+        },
+        "Bool": { "aws:PrincipalIsAWSService": "false" }
+      }
+    }
+  ]
+}

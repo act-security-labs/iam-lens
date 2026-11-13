@@ -1,0 +1,5 @@
+{
+  "arn": "arn:aws:s3:::oai-canonical-bucket",
+  "name": "oai-canonical-bucket",
+  "region": "us-east-1"
+}
