@@ -1183,6 +1183,7 @@ export function unionConditions(
   }
 
   const merged: PermissionConditions = {}
+  let differingEntries = 0
 
   // 2. For each operator op that appears in both:
   for (const op of opsA) {
@@ -1198,6 +1199,15 @@ export function unionConditions(
     for (const key of keysA) {
       const valsA = a[op][key]
       const valsB = b[op][key]
+      const valuesA = new Set(valsA)
+      const valuesB = new Set(valsB)
+      if (valuesA.size !== valuesB.size || [...valuesA].some((value) => !valuesB.has(value))) {
+        differingEntries++
+        // Independent unions of multiple entries would admit cross-pairs not present in either alternative.
+        if (differingEntries > 1) {
+          return null
+        }
+      }
 
       // How we combine depends on operator semantics:
       switch (conditionBaseOperator(op)) {

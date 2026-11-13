@@ -11,6 +11,107 @@ const addPermissionTests: {
   expected: TestPermission[]
 }[] = [
   {
+    name: 'Keep correlated condition alternatives separate',
+    permissions: [
+      {
+        action: 's3:GetObject',
+        effect: 'Allow',
+        resource: ['*'],
+        conditions: { StringEquals: { 'aws:SourceVpc': ['vpc-a'], 'aws:SourceVpce': ['vpce-a'] } }
+      },
+      {
+        action: 's3:GetObject',
+        effect: 'Allow',
+        resource: ['*'],
+        conditions: { StringEquals: { 'aws:SourceVpc': ['vpc-b'], 'aws:SourceVpce': ['vpce-b'] } }
+      }
+    ],
+    expected: [
+      {
+        action: 's3:GetObject',
+        effect: 'Allow',
+        resource: ['*'],
+        conditions: { StringEquals: { 'aws:SourceVpc': ['vpc-a'], 'aws:SourceVpce': ['vpce-a'] } }
+      },
+      {
+        action: 's3:GetObject',
+        effect: 'Allow',
+        resource: ['*'],
+        conditions: { StringEquals: { 'aws:SourceVpc': ['vpc-b'], 'aws:SourceVpce': ['vpce-b'] } }
+      }
+    ]
+  },
+  {
+    name: 'Merge one alternative without merging a correlated alternative',
+    permissions: [
+      {
+        action: 's3:GetObject',
+        effect: 'Allow',
+        resource: ['*'],
+        conditions: { StringEquals: { 'aws:SourceVpc': ['vpc-a'], 'aws:SourceVpce': ['vpce-a'] } }
+      },
+      {
+        action: 's3:GetObject',
+        effect: 'Allow',
+        resource: ['*'],
+        conditions: { StringEquals: { 'aws:SourceVpc': ['vpc-b'], 'aws:SourceVpce': ['vpce-b'] } }
+      },
+      {
+        action: 's3:GetObject',
+        effect: 'Allow',
+        resource: ['*'],
+        conditions: { StringEquals: { 'aws:SourceVpc': ['vpc-c'], 'aws:SourceVpce': ['vpce-a'] } }
+      }
+    ],
+    expected: [
+      {
+        action: 's3:GetObject',
+        effect: 'Allow',
+        resource: ['*'],
+        conditions: {
+          stringequals: { 'aws:sourcevpc': ['vpc-a', 'vpc-c'], 'aws:sourcevpce': ['vpce-a'] }
+        }
+      },
+      {
+        action: 's3:GetObject',
+        effect: 'Allow',
+        resource: ['*'],
+        conditions: { StringEquals: { 'aws:SourceVpc': ['vpc-b'], 'aws:SourceVpce': ['vpce-b'] } }
+      }
+    ]
+  },
+  {
+    name: 'Keep correlated alternatives separate in reverse insertion order',
+    permissions: [
+      {
+        action: 's3:GetObject',
+        effect: 'Allow',
+        resource: ['*'],
+        conditions: { StringEquals: { 'aws:SourceVpc': ['vpc-b'], 'aws:SourceVpce': ['vpce-b'] } }
+      },
+      {
+        action: 's3:GetObject',
+        effect: 'Allow',
+        resource: ['*'],
+        conditions: { StringEquals: { 'aws:SourceVpc': ['vpc-a'], 'aws:SourceVpce': ['vpce-a'] } }
+      }
+    ],
+    expected: [
+      {
+        action: 's3:GetObject',
+        effect: 'Allow',
+        resource: ['*'],
+        conditions: { StringEquals: { 'aws:SourceVpc': ['vpc-b'], 'aws:SourceVpce': ['vpce-b'] } }
+      },
+      {
+        action: 's3:GetObject',
+        effect: 'Allow',
+        resource: ['*'],
+        conditions: { StringEquals: { 'aws:SourceVpc': ['vpc-a'], 'aws:SourceVpce': ['vpce-a'] } }
+      }
+    ]
+  },
+  {
     name: 'Add single permission',
     permissions: [{ action: 's3:ListBucket', effect: 'Allow', resource: ['*'] }],
     expected: [{ action: 's3:ListBucket', effect: 'Allow', resource: ['*'] }]
@@ -178,6 +279,38 @@ const intersectionTests: {
   permissions2: TestPermission[]
   expected: TestPermission[]
 }[] = [
+  {
+    name: 'Intersection preserves correlated alternatives across levels',
+    permissions1: [
+      {
+        action: 's3:GetObject',
+        effect: 'Allow',
+        resource: ['*'],
+        conditions: { StringEquals: { 'aws:SourceVpc': ['vpc-a'], 'aws:SourceVpce': ['vpce-a'] } }
+      },
+      {
+        action: 's3:GetObject',
+        effect: 'Allow',
+        resource: ['*'],
+        conditions: { StringEquals: { 'aws:SourceVpc': ['vpc-b'], 'aws:SourceVpce': ['vpce-b'] } }
+      }
+    ],
+    permissions2: [{ action: 's3:GetObject', effect: 'Allow', resource: ['*'] }],
+    expected: [
+      {
+        action: 's3:GetObject',
+        effect: 'Allow',
+        resource: ['*'],
+        conditions: { StringEquals: { 'aws:SourceVpc': ['vpc-a'], 'aws:SourceVpce': ['vpce-a'] } }
+      },
+      {
+        action: 's3:GetObject',
+        effect: 'Allow',
+        resource: ['*'],
+        conditions: { StringEquals: { 'aws:SourceVpc': ['vpc-b'], 'aws:SourceVpce': ['vpce-b'] } }
+      }
+    ]
+  },
   {
     name: 'Intersecting permissions with same effect',
     permissions1: [

@@ -671,6 +671,124 @@ const permissionUnionTests: {
     }
   },
   {
+    name: 'do not merge correlated differences in two condition keys',
+    first: {
+      effect: 'Allow',
+      action: 's3:GetObject',
+      resource: ['*'],
+      conditions: { StringEquals: { 'aws:SourceVpc': ['vpc-a'], 'aws:SourceVpce': ['vpce-a'] } }
+    },
+    second: {
+      effect: 'Allow',
+      action: 's3:GetObject',
+      resource: ['*'],
+      conditions: { StringEquals: { 'aws:SourceVpc': ['vpc-b'], 'aws:SourceVpce': ['vpce-b'] } }
+    },
+    merged: false
+  },
+  {
+    name: 'do not merge correlated differences across operators',
+    first: {
+      effect: 'Allow',
+      action: 's3:GetObject',
+      resource: ['*'],
+      conditions: {
+        StringEquals: { 'aws:SourceVpc': ['vpc-a'] },
+        NumericLessThan: { 'example:limit': ['10'] }
+      }
+    },
+    second: {
+      effect: 'Allow',
+      action: 's3:GetObject',
+      resource: ['*'],
+      conditions: {
+        StringEquals: { 'aws:SourceVpc': ['vpc-b'] },
+        NumericLessThan: { 'example:limit': ['20'] }
+      }
+    },
+    merged: false
+  },
+  {
+    name: 'merge one varying key when another value set is reordered and duplicated',
+    first: {
+      effect: 'Allow',
+      action: 's3:GetObject',
+      resource: ['*'],
+      conditions: {
+        StringEquals: { 'aws:SourceVpc': ['vpc-a', 'vpc-b'], 'aws:SourceVpce': ['vpce-a'] }
+      }
+    },
+    second: {
+      effect: 'Allow',
+      action: 's3:GetObject',
+      resource: ['*'],
+      conditions: {
+        StringEquals: { 'aws:SourceVpc': ['vpc-b', 'vpc-a', 'vpc-a'], 'aws:SourceVpce': ['vpce-b'] }
+      }
+    },
+    merged: {
+      effect: 'Allow',
+      action: 's3:GetObject',
+      resource: ['*'],
+      conditions: {
+        stringequals: {
+          'aws:sourcevpc': ['vpc-a', 'vpc-b'],
+          'aws:sourcevpce': ['vpce-a', 'vpce-b']
+        }
+      }
+    }
+  },
+  {
+    name: 'merge one varying key with an unchanged numeric condition',
+    first: {
+      effect: 'Allow',
+      action: 's3:GetObject',
+      resource: ['*'],
+      conditions: {
+        StringEquals: { 'aws:SourceVpc': ['vpc-a'] },
+        NumericLessThan: { 'example:limit': ['10'] }
+      }
+    },
+    second: {
+      effect: 'Allow',
+      action: 's3:GetObject',
+      resource: ['*'],
+      conditions: {
+        StringEquals: { 'aws:SourceVpc': ['vpc-b'] },
+        NumericLessThan: { 'example:limit': ['10'] }
+      }
+    },
+    merged: {
+      effect: 'Allow',
+      action: 's3:GetObject',
+      resource: ['*'],
+      conditions: {
+        stringequals: { 'aws:sourcevpc': ['vpc-a', 'vpc-b'] },
+        numericlessthan: { 'example:limit': ['10'] }
+      }
+    }
+  },
+  {
+    name: 'do not merge opposing subset differences in two condition keys',
+    first: {
+      effect: 'Allow',
+      action: 's3:GetObject',
+      resource: ['*'],
+      conditions: {
+        StringEquals: { 'aws:SourceVpc': ['vpc-a', 'vpc-b'], 'aws:SourceVpce': ['vpce-a'] }
+      }
+    },
+    second: {
+      effect: 'Allow',
+      action: 's3:GetObject',
+      resource: ['*'],
+      conditions: {
+        StringEquals: { 'aws:SourceVpc': ['vpc-a'], 'aws:SourceVpce': ['vpce-a', 'vpce-b'] }
+      }
+    },
+    merged: false
+  },
+  {
     name: 'conditions cannot merge different operators',
     first: {
       effect: 'Allow',
@@ -892,7 +1010,7 @@ describe('Permission#union', () => {
 
       //Then the result should match the expected value
       if (test.merged === false) {
-        expect(result.length).toEqual(2)
+        expectPermissionsToMatch(result, [test.first, test.second])
       } else if (test.merged) {
         expect(result.length).toEqual(1)
         const expectedMerge = test.merged as TestPermission
