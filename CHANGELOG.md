@@ -1,3 +1,10 @@
+## [0.1.202](https://github.com/act-security-labs/iam-lens/compare/v0.1.201...v0.1.202) (2026-11-13)
+
+
+### Features
+
+* model CloudFront origin access identity requests ([#257](https://github.com/act-security-labs/iam-lens/issues/257)) ([3cf7392](https://github.com/act-security-labs/iam-lens/commit/3cf73928609b40827c716095b16dd6ed164baa29))
+
 ## [0.1.201](https://github.com/act-security-labs/iam-lens/compare/v0.1.200...v0.1.201) (2026-11-13)
 
 
