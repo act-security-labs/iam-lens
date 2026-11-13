@@ -1,3 +1,10 @@
+## [0.1.201](https://github.com/act-security-labs/iam-lens/compare/v0.1.200...v0.1.201) (2026-11-13)
+
+
+### Bug Fixes
+
+* preserve correlated condition alternatives ([#256](https://github.com/act-security-labs/iam-lens/issues/256)) ([9d10568](https://github.com/act-security-labs/iam-lens/commit/9d10568d48b78073dfd84036f9d7c5435261d895))
+
 ## [0.1.200](https://github.com/act-security-labs/iam-lens/compare/v0.1.199...v0.1.200) (2026-11-12)
 
 
