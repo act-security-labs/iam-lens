@@ -31,6 +31,53 @@ const simulateIntegrationTest: {
   expectedPatterns?: { pattern: string; result: EvaluationResult }[]
 }[] = [
   {
+    name: 'collected OAI resource ARN returns a denial for a wildcard-only action',
+    data: '3',
+    request: {
+      action: 's3:ListAllMyBuckets',
+      principal: 'arn:aws:cloudfront::400000000002:origin-access-identity/E123EXAMPLE',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ImplicitlyDenied'
+  },
+  {
+    name: 'collected OAI policy ARN returns a denial for a wildcard-only action',
+    data: '3',
+    request: {
+      action: 's3:ListAllMyBuckets',
+      principal: 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E123EXAMPLE',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ImplicitlyDenied'
+  },
+  {
+    name: 'virtual collected OAI returns a denial for a wildcard-only action',
+    data: '3',
+    variant: 'virtualPrincipal',
+    request: {
+      action: 's3:ListAllMyBuckets',
+      principal: 'arn:aws:cloudfront::400000000002:origin-access-identity/E123EXAMPLE',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ImplicitlyDenied'
+  },
+  {
+    name: 'external OAI returns a denial for a wildcard-only action with supplied resource account',
+    data: '3',
+    variant: 'externalPrincipal',
+    request: {
+      action: 's3:ListAllMyBuckets',
+      principal: 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E999EXAMPLE',
+      resourceAccount: '400000000003',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ImplicitlyDenied'
+  },
+  {
     name: 'CloudFront OAC service principal retains its distinct bucket-policy grant',
     data: '3',
     request: {
