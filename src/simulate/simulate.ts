@@ -411,12 +411,9 @@ async function simulateRequestInternal(
     throw new Error(`Virtual principal ${simulationRequest.principal} must contain an account ID.`)
   }
 
-  if (actionDetails.isWildcardOnly && isOai) {
-    throw new Error('CloudFront OAI simulations do not support wildcard-only actions.')
-  }
-
   if (
     actionDetails.isWildcardOnly &&
+    !isOai &&
     (variant === 'anonymous' ||
       variant === 'externalPrincipal' ||
       variant === 'externalResource' ||
@@ -462,10 +459,17 @@ async function simulateRequestInternal(
   }
 
   if (actionDetails.isWildcardOnly) {
-    simulationRequest.resourceAccount = splitArnParts(simulationRequest.principal!).accountId
+    if (isOai) {
+      simulationRequest.resourceAccount ??= collectedOai?.accountId
+    } else {
+      simulationRequest.resourceAccount = splitArnParts(simulationRequest.principal!).accountId
+    }
   }
 
   if (!simulationRequest.resourceAccount && !simulationRequest.resourceArn) {
+    if (isOai && actionDetails.isWildcardOnly) {
+      throw new Error('Wildcard-only OAI simulations require a known resource account.')
+    }
     throw new Error(
       'Non wildcard actions require a resource ARN or resource account to be specified.'
     )
@@ -495,7 +499,8 @@ async function simulateRequestInternal(
   const principalPolicyInputs = await principalPoliciesForVariant(
     variant,
     simulationRequest,
-    collectClient
+    collectClient,
+    collectedOai?.accountId
   )
   const resourcePolicyInputs = await resourcePoliciesForVariant(
     variant,
@@ -602,12 +607,14 @@ async function simulateRequestInternal(
  * @param variant the simulation policy-source variant
  * @param request the normalized request
  * @param collectClient the data client
+ * @param oaiOwnerAccount the validated owner of a collected OAI, if known
  * @returns fully prepared principal-side simulation inputs
  */
 async function principalPoliciesForVariant(
   variant: SimulationVariant,
   request: InternalSimulationRequest,
-  collectClient: IamCollectClient
+  collectClient: IamCollectClient,
+  oaiOwnerAccount?: string
 ): Promise<PrincipalPolicyInputs> {
   if (variant === 'anonymous') {
     return emptyPrincipalPolicyInputs()
@@ -622,8 +629,13 @@ async function principalPoliciesForVariant(
 
   const principalArn = request.principal!
   if (variant === 'virtualPrincipal') {
-    const accountId = splitArnParts(principalArn).accountId
+    const accountId = isCloudFrontOriginAccessUserArn(principalArn)
+      ? oaiOwnerAccount
+      : splitArnParts(principalArn).accountId
     if (!accountId) {
+      if (isCloudFrontOriginAccessUserArn(principalArn)) {
+        throw new Error(`Virtual OAI principal ${principalArn} requires a collected owner account.`)
+      }
       throw new Error(`Virtual principal ${principalArn} must contain an account ID.`)
     }
     const [serviceControlPolicies, principalAccountRcps] = await Promise.all([
