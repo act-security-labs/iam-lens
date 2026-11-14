@@ -65,6 +65,19 @@ const simulateIntegrationTest: {
     expected: 'ImplicitlyDenied'
   },
   {
+    name: 'external OAI returns a denial for a wildcard-only action with unknown account',
+    data: '3',
+    variant: 'externalPrincipal',
+    request: {
+      action: 's3:ListAllMyBuckets',
+      principal: 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E999EXAMPLE',
+      resourceArn: '*',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ImplicitlyDenied'
+  },
+  {
     name: 'external OAI returns a denial for a wildcard-only action with supplied resource account',
     data: '3',
     variant: 'externalPrincipal',

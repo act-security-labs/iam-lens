@@ -42,22 +42,90 @@ describe('simulateRequest', () => {
     expect(result.overallResult).toBe('ImplicitlyDenied')
   })
 
-  it('does not invent an account for an uncollected OAI wildcard-only action', async () => {
+  it.each([
+    {
+      principal: 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E123',
+      resourceArn: undefined,
+      action: 's3:ListAllMyBuckets',
+      simulationMode: 'Discovery' as const
+    },
+    {
+      principal: 'arn:aws:cloudfront::123456789012:origin-access-identity/E123',
+      resourceArn: '*',
+      action: 's3:ListAllMyBuckets',
+      simulationMode: 'Strict' as const
+    },
+    {
+      principal: 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E123',
+      resourceArn: undefined,
+      action: 'ec2:DescribeRegions',
+      simulationMode: 'Discovery' as const
+    }
+  ])(
+    'denies an uncollected OAI wildcard-only action without inventing an account: $action/$simulationMode',
+    async (options) => {
+      //Given an uncollected OAI without a resource account
+      const { client } = testStore()
+      const lookupResourceOrg = vi.spyOn(client, 'getOrgIdForAccount')
+
+      //When a wildcard-only action is simulated
+      const { request, result } = await simulateExternalPrincipalRequest(
+        { ...options, customContextKeys: {} },
+        client
+      )
+
+      //Then the action is denied and no real resource account is claimed
+      expect(request.resource).toEqual({ resource: '*', accountId: '' })
+      expect(result.overallResult).toBe('ImplicitlyDenied')
+      expect(request.contextVariables['aws:ResourceAccount']).toBeUndefined()
+      expect(lookupResourceOrg).not.toHaveBeenCalled()
+    }
+  )
+
+  it('denies a virtual OAI wildcard-only action when its owner is unknown', async () => {
     //Given an uncollected OAI without a resource account
     const { client } = testStore()
 
-    //When and Then the account needed for the simulation cannot be determined
-    await expect(
-      simulateExternalPrincipalRequest(
-        {
-          simulationMode: 'Discovery',
-          principal: 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E123',
-          action: 's3:ListAllMyBuckets',
-          customContextKeys: {}
-        },
-        client
-      )
-    ).rejects.toThrow('Wildcard-only OAI simulations require a known resource account.')
+    //When a wildcard-only action is simulated for a virtual principal
+    const { request, result } = await simulateVirtualPrincipal(
+      {
+        simulationMode: 'Discovery',
+        principal: 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E123',
+        action: 's3:ListAllMyBuckets',
+        customContextKeys: {}
+      },
+      client
+    )
+
+    //Then the result is denied without assigning an account
+    expect(request.resource).toEqual({ resource: '*', accountId: '' })
+    expect(result.overallResult).toBe('ImplicitlyDenied')
+  })
+
+  it('denies a virtual wildcard resource request for an OAI without a resource account', async () => {
+    //Given a collected OAI and an explicit wildcard resource without an account
+    const { store, client } = testStore()
+    const owner = '123456789012'
+    const principal = `arn:aws:cloudfront::${owner}:origin-access-identity/E123`
+    await store.saveResourceMetadata(owner, principal, 'metadata', { arn: principal })
+    const index = await store.getIndex('cloudfront-oai-to-accounts', {})
+    await store.saveIndex('cloudfront-oai-to-accounts', { E123: owner }, index.lockId)
+
+    //When a wildcard-only action is simulated against a virtual resource
+    const { request, result } = await simulateVirtualResourceRequest(
+      {
+        simulationMode: 'Discovery',
+        principal,
+        action: 's3:ListAllMyBuckets',
+        resourceArn: '*',
+        customContextKeys: {}
+      },
+      client
+    )
+
+    //Then the normal OAI action cap still denies it
+    expect(request.resource.resource).toBe('*')
+    expect(result.overallResult).toBe('ImplicitlyDenied')
   })
 
   it('does not treat an uncollected OAI policy ARN as a virtual principal account', async () => {

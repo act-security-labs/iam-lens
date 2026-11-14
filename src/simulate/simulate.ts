@@ -448,7 +448,14 @@ async function simulateRequestInternal(
   ) {
     simulationRequest.resourceAccount = splitArnParts(simulationRequest.principal).accountId
   }
-  if (variant === 'virtualResource' && !simulationRequest.resourceAccount) {
+  const isOaiWildcardAction = isOai && actionDetails.isWildcardOnly
+  const isOaiWildcardResource =
+    isOaiWildcardAction && (!simulationRequest.resourceArn || simulationRequest.resourceArn === '*')
+  if (
+    variant === 'virtualResource' &&
+    !simulationRequest.resourceAccount &&
+    !isOaiWildcardResource
+  ) {
     const resourceAccount = splitArnParts(simulationRequest.resourceArn!).accountId
     if (!resourceAccount) {
       throw new Error(
@@ -461,24 +468,31 @@ async function simulateRequestInternal(
   if (actionDetails.isWildcardOnly) {
     if (isOai) {
       simulationRequest.resourceAccount ??= collectedOai?.accountId
+      if (simulationRequest.resourceArn === '*') {
+        simulationRequest.resourceArn = undefined
+      }
     } else {
       simulationRequest.resourceAccount = splitArnParts(simulationRequest.principal!).accountId
     }
   }
 
-  if (!simulationRequest.resourceAccount && !simulationRequest.resourceArn) {
-    if (isOai && actionDetails.isWildcardOnly) {
-      throw new Error('Wildcard-only OAI simulations require a known resource account.')
-    }
+  if (
+    !simulationRequest.resourceAccount &&
+    !simulationRequest.resourceArn &&
+    !isOaiWildcardResource
+  ) {
     throw new Error(
       'Non wildcard actions require a resource ARN or resource account to be specified.'
     )
   }
-  simulationRequest.resourceAccount =
-    simulationRequest.resourceAccount ||
-    (await getAccountIdForResource(collectClient, simulationRequest.resourceArn!))
+  if (!simulationRequest.resourceAccount && simulationRequest.resourceArn) {
+    simulationRequest.resourceAccount = await getAccountIdForResource(
+      collectClient,
+      simulationRequest.resourceArn
+    )
+  }
 
-  if (!simulationRequest.resourceAccount) {
+  if (!simulationRequest.resourceAccount && !isOaiWildcardResource) {
     throw new Error(`Unable to find account ID for resource ${simulationRequest.resourceArn}`)
   }
 
@@ -514,7 +528,8 @@ async function simulateRequestInternal(
     action: simulationRequest.action,
     resource: {
       resource: simulationRequest.resourceArn || '*',
-      accountId: simulationRequest.resourceAccount
+      // iam-simulate requires a string; an empty value means no account was determined.
+      accountId: simulationRequest.resourceAccount ?? ''
     },
     principal: variant === 'anonymous' ? anonymousPrincipal : simulationRequest.principal!,
     contextVariables: {}
