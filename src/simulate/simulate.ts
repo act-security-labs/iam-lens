@@ -499,8 +499,7 @@ async function simulateRequestInternal(
   const principalPolicyInputs = await principalPoliciesForVariant(
     variant,
     simulationRequest,
-    collectClient,
-    collectedOai?.accountId
+    collectClient
   )
   const resourcePolicyInputs = await resourcePoliciesForVariant(
     variant,
@@ -607,14 +606,12 @@ async function simulateRequestInternal(
  * @param variant the simulation policy-source variant
  * @param request the normalized request
  * @param collectClient the data client
- * @param oaiOwnerAccount the validated owner of a collected OAI, if known
  * @returns fully prepared principal-side simulation inputs
  */
 async function principalPoliciesForVariant(
   variant: SimulationVariant,
   request: InternalSimulationRequest,
-  collectClient: IamCollectClient,
-  oaiOwnerAccount?: string
+  collectClient: IamCollectClient
 ): Promise<PrincipalPolicyInputs> {
   if (variant === 'anonymous') {
     return emptyPrincipalPolicyInputs()
@@ -629,13 +626,12 @@ async function principalPoliciesForVariant(
 
   const principalArn = request.principal!
   if (variant === 'virtualPrincipal') {
-    const accountId = isCloudFrontOriginAccessUserArn(principalArn)
-      ? oaiOwnerAccount
-      : splitArnParts(principalArn).accountId
+    if (isCloudFrontOriginAccessUserArn(principalArn)) {
+      // Match the collected OAI path: the owner's IAM policies are not OAI policies.
+      return emptyPrincipalPolicyInputs()
+    }
+    const accountId = splitArnParts(principalArn).accountId
     if (!accountId) {
-      if (isCloudFrontOriginAccessUserArn(principalArn)) {
-        throw new Error(`Virtual OAI principal ${principalArn} requires a collected owner account.`)
-      }
       throw new Error(`Virtual principal ${principalArn} must contain an account ID.`)
     }
     const [serviceControlPolicies, principalAccountRcps] = await Promise.all([
