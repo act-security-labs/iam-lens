@@ -134,6 +134,62 @@ interface WhoCanIntegrationTest {
 
 const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
   {
+    name: 'OAI skips wildcard-only actions while preserving supported actions',
+    data: '3',
+    request: {
+      resource: 'arn:aws:s3:::oai-explicit-bucket/object',
+      actions: ['s3:GetObject', 's3:ListAllMyBuckets'],
+      principalScope: {
+        principals: ['arn:aws:cloudfront::400000000002:origin-access-identity/E123EXAMPLE']
+      }
+    },
+    expected: {
+      who: [
+        {
+          principal: 'arn:aws:cloudfront::400000000002:origin-access-identity/E123EXAMPLE',
+          service: 's3',
+          action: 'GetObject',
+          level: 'read',
+          resourceType: 'object'
+        }
+      ]
+    }
+  },
+  {
+    name: 'OAI policy ARN scope skips wildcard-only actions',
+    data: '3',
+    request: {
+      resource: 'arn:aws:s3:::oai-explicit-bucket/object',
+      actions: ['s3:GetObject', 's3:ListAllMyBuckets'],
+      principalScope: {
+        principals: ['arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E123EXAMPLE']
+      }
+    },
+    expected: {
+      who: [
+        {
+          principal: 'arn:aws:cloudfront::400000000002:origin-access-identity/E123EXAMPLE',
+          service: 's3',
+          action: 'GetObject',
+          level: 'read',
+          resourceType: 'object'
+        }
+      ]
+    }
+  },
+  {
+    name: 'OAI skips wildcard-only actions when no supported action is requested',
+    data: '3',
+    request: {
+      resource: 'arn:aws:s3:::oai-explicit-bucket/object',
+      actions: ['s3:ListAllMyBuckets'],
+      principalScope: {
+        principals: ['arn:aws:cloudfront::400000000002:origin-access-identity/E123EXAMPLE']
+      }
+    },
+    expected: { who: [] }
+  },
+  {
     name: 'OAI is excluded when scoped to a different account',
     data: '3',
     request: {

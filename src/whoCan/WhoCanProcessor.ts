@@ -39,6 +39,7 @@ import {
 import { buildPrincipalArnFilter, principalMatchesFilter } from './principalArnFilter.js'
 import { actionsThatDoNotAutomaticallyTrustTheCurrentAccount } from './untrustingActions.js'
 import { type WorkerBootstrapPlugin } from './workerBootstrapPlugin.js'
+import { oaiSimulationActions } from './oaiActions.js'
 import { log } from '@actsecurity/log'
 
 export type { WorkerBootstrapPlugin } from './workerBootstrapPlugin.js'
@@ -1156,6 +1157,9 @@ export class WhoCanProcessor {
       }
     }
 
+    // Resolve once on demand and share the in-flight lookup among OAI preparation jobs.
+    let oaiActionsPromise: Promise<string[]> | undefined
+
     // Enqueue specific principals from resource policy (iterate the Set to
     // deduplicate — the same principal can appear in the list more than once
     // when multiple statements reference it, e.g. an explicit Principal element
@@ -1173,7 +1177,8 @@ export class WhoCanProcessor {
               if (!identity) {
                 state.principalsNotFound.push(principal)
               } else {
-                for (const action of actions) {
+                oaiActionsPromise ??= oaiSimulationActions(actions)
+                for (const action of await oaiActionsPromise) {
                   this.enqueueScenario(state, {
                     simulationVariant: 'authenticated',
                     resource,

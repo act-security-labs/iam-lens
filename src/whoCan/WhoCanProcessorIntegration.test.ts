@@ -6,6 +6,12 @@ import { join, resolve } from 'path'
 import { fileURLToPath } from 'url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getTestDatasetConfigs } from '../test-datasets/testClient.js'
+import { oaiSimulationActions } from './oaiActions.js'
+
+vi.mock('./oaiActions.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./oaiActions.js')>()
+  return { ...actual, oaiSimulationActions: vi.fn(actual.oaiSimulationActions) }
+})
 
 const principalScopeFailure = vi.hoisted(() => ({ enabled: false }))
 
@@ -66,6 +72,64 @@ async function runSingleRequest(
   }
 }
 describe('WhoCanProcessor Integration Tests', () => {
+  it('does not look up OAI actions when no OAI is selected', async () => {
+    //Given a request scoped to an IAM user rather than an OAI
+    vi.mocked(oaiSimulationActions).mockClear()
+    const settledEvents: WhoCanSettledEvent[] = []
+
+    //When the request is processed
+    await runSingleRequest({
+      onRequestSettled: async (event) => {
+        settledEvents.push(event)
+      }
+    })
+
+    //Then it completes without loading OAI-specific action metadata
+    expect(settledEvents).toHaveLength(1)
+    expect(settledEvents[0]?.status).toBe('fulfilled')
+    expect(oaiSimulationActions).not.toHaveBeenCalled()
+  })
+
+  it('shares the lazy action lookup across multiple OAI preparation jobs', async () => {
+    //Given a wildcard grant and two collected OAIs
+    vi.mocked(oaiSimulationActions).mockClear()
+    const settledEvents: WhoCanSettledEvent[] = []
+    const actions = ['s3:GetObject', 's3:ListAllMyBuckets']
+
+    //When both identities are checked for the same request
+    await runSingleRequest({
+      collectConfigs: getTestDatasetConfigs('3'),
+      request: {
+        resource: 'arn:aws:s3:::oai-wildcard-bucket/object',
+        actions,
+        principalScope: {
+          principals: [
+            'arn:aws:cloudfront::400000000002:origin-access-identity/E123EXAMPLE',
+            'arn:aws:cloudfront::400000000004:origin-access-identity/E456EXAMPLE'
+          ]
+        }
+      },
+      onRequestSettled: async (event) => {
+        settledEvents.push(event)
+      }
+    })
+
+    //Then both grants are returned after exactly one OAI action lookup
+    expect(oaiSimulationActions).toHaveBeenCalledExactlyOnceWith(actions)
+    expect(settledEvents).toHaveLength(1)
+    const event = settledEvents[0]!
+    expect(event.status).toBe('fulfilled')
+    if (event.status !== 'fulfilled') {
+      throw new Error('Expected a fulfilled whoCan response')
+    }
+    expect(event.result.allowed.map(({ principal, action }) => [principal, action]).sort()).toEqual(
+      [
+        ['arn:aws:cloudfront::400000000002:origin-access-identity/E123EXAMPLE', 'GetObject'],
+        ['arn:aws:cloudfront::400000000004:origin-access-identity/E456EXAMPLE', 'GetObject']
+      ]
+    )
+  })
+
   describe('WhoCanProcessor request draining', () => {
     it('drains queued scenarios after root preparation fails', async () => {
       //Given multiple anonymous scenarios are queued before a later principal-scope lookup fails
