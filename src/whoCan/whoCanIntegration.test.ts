@@ -134,6 +134,19 @@ interface WhoCanIntegrationTest {
 
 const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
   {
+    name: 'wildcard-only action completes for a scoped OAI',
+    data: '3',
+    request: {
+      resourceAccount: '400000000002',
+      actions: ['s3:ListAllMyBuckets'],
+      principalScope: {
+        principals: ['arn:aws:cloudfront::400000000002:origin-access-identity/E123EXAMPLE']
+      }
+    },
+    expected: { who: [] },
+    simulationCounts: { withIndex: 1, withoutIndex: 1 }
+  },
+  {
     name: 'OAI is excluded when scoped to a different account',
     data: '3',
     request: {

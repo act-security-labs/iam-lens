@@ -21,30 +21,34 @@ describe('simulateRequest', () => {
   it.each([
     'arn:aws:cloudfront::123456789012:origin-access-identity/E123',
     'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E123'
-  ])('simulates a wildcard-only action for an uncollected external OAI %s', async (principal) => {
-    //Given an uncollected OAI and an explicitly supplied resource account
+  ])('rejects wildcard-only external-principal requests for an OAI %s', async (principal) => {
+    //Given an OAI and an explicitly supplied resource account
     const { client } = testStore()
 
-    //When a wildcard-only action is simulated
-    const { request, result } = await simulateExternalPrincipalRequest(
-      {
-        simulationMode: 'Discovery',
-        principal,
-        action: 's3:ListAllMyBuckets',
-        resourceAccount: '999999999999',
-        customContextKeys: {}
-      },
-      client
-    )
-
-    //Then the supplied account is preserved and the unsupported OAI action is denied
-    expect(request.resource).toEqual({ resource: '*', accountId: '999999999999' })
-    expect(result.overallResult).toBe('ImplicitlyDenied')
+    //When and Then the standard external-principal restriction applies
+    await expect(
+      simulateExternalPrincipalRequest(
+        {
+          simulationMode: 'Discovery',
+          principal,
+          action: 's3:ListAllMyBuckets',
+          resourceAccount: '999999999999',
+          customContextKeys: {}
+        },
+        client
+      )
+    ).rejects.toThrow('External principal simulations do not support wildcard-only actions.')
   })
 
   it.each([
-    { resourceArn: undefined, expected: 'A resource ARN or resource account must be specified.' },
-    { resourceArn: '*', expected: 'Unable to find account ID for resource *' }
+    {
+      resourceArn: undefined,
+      expected: 'External principal simulations do not support wildcard-only actions.'
+    },
+    {
+      resourceArn: '*',
+      expected: 'External principal simulations do not support wildcard-only actions.'
+    }
   ])('requires an account for an uncollected OAI with resource $resourceArn', async (options) => {
     //Given an uncollected OAI and no resource account
     const { client } = testStore()
@@ -64,7 +68,33 @@ describe('simulateRequest', () => {
     ).rejects.toThrow(options.expected)
   })
 
-  it('requires a resource account for a virtual wildcard resource, even for a collected OAI', async () => {
+  it.each([
+    { simulate: simulateExternalResourceRequest, variant: 'External resource' },
+    { simulate: simulateVirtualResourceRequest, variant: 'Virtual resource' }
+  ])(
+    'rejects wildcard-only OAI requests for the $variant variant',
+    async ({ simulate, variant }) => {
+      //Given an OAI and an explicitly supplied resource account
+      const { client } = testStore()
+
+      //When and Then the standard resource-variant restriction applies
+      await expect(
+        simulate(
+          {
+            simulationMode: 'Discovery',
+            principal: 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E123',
+            action: 's3:ListAllMyBuckets',
+            resourceArn: '*',
+            resourceAccount: '999999999999',
+            customContextKeys: {}
+          },
+          client
+        )
+      ).rejects.toThrow(`${variant} simulations do not support wildcard-only actions.`)
+    }
+  )
+
+  it('rejects a virtual wildcard resource for a collected OAI without a resource account', async () => {
     //Given a collected OAI and a wildcard resource without an account
     const { store, client } = testStore()
     const owner = '123456789012'
@@ -73,7 +103,7 @@ describe('simulateRequest', () => {
     const index = await store.getIndex('cloudfront-oai-to-accounts', {})
     await store.saveIndex('cloudfront-oai-to-accounts', { E123: owner }, index.lockId)
 
-    //When and Then the virtual resource contract rejects the missing resource account
+    //When and Then the standard virtual-resource wildcard restriction applies
     await expect(
       simulateVirtualResourceRequest(
         {
@@ -85,10 +115,10 @@ describe('simulateRequest', () => {
         },
         client
       )
-    ).rejects.toThrow('Virtual resource * must contain an account ID.')
+    ).rejects.toThrow('Virtual resource simulations do not support wildcard-only actions.')
   })
 
-  it('uses an explicitly supplied resource account for a virtual wildcard resource', async () => {
+  it('rejects a virtual wildcard resource even with an explicitly supplied account', async () => {
     //Given a collected OAI and a distinct resource account
     const { store, client } = testStore()
     const owner = '123456789012'
@@ -97,22 +127,20 @@ describe('simulateRequest', () => {
     const index = await store.getIndex('cloudfront-oai-to-accounts', {})
     await store.saveIndex('cloudfront-oai-to-accounts', { E123: owner }, index.lockId)
 
-    //When a wildcard-only action is simulated against a wildcard resource
-    const { request, result } = await simulateVirtualResourceRequest(
-      {
-        simulationMode: 'Discovery',
-        principal,
-        action: 's3:ListAllMyBuckets',
-        resourceArn: '*',
-        resourceAccount: '999999999999',
-        customContextKeys: {}
-      },
-      client
-    )
-
-    //Then the resource account is not replaced by the OAI owner
-    expect(request.resource).toEqual({ resource: '*', accountId: '999999999999' })
-    expect(result.overallResult).toBe('ImplicitlyDenied')
+    //When and Then the account does not bypass the virtual-resource restriction
+    await expect(
+      simulateVirtualResourceRequest(
+        {
+          simulationMode: 'Discovery',
+          principal,
+          action: 's3:ListAllMyBuckets',
+          resourceArn: '*',
+          resourceAccount: '999999999999',
+          customContextKeys: {}
+        },
+        client
+      )
+    ).rejects.toThrow('Virtual resource simulations do not support wildcard-only actions.')
   })
 
   it('does not treat an uncollected OAI policy ARN as a virtual principal account', async () => {
@@ -205,7 +233,7 @@ describe('simulateRequest', () => {
     const { client } = testStore()
 
     //When the simulation runs
-    const { result } = await simulateExternalPrincipalRequest(
+    const { result } = await simulateVirtualPrincipal(
       {
         simulationMode: 'Discovery',
         principal: 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E123',

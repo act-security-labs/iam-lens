@@ -413,7 +413,6 @@ async function simulateRequestInternal(
 
   if (
     actionDetails.isWildcardOnly &&
-    !isOai &&
     (variant === 'anonymous' ||
       variant === 'externalPrincipal' ||
       variant === 'externalResource' ||

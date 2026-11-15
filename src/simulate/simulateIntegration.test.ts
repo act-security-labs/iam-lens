@@ -78,7 +78,7 @@ const simulateIntegrationTest: {
     expectedError: 'Unable to find account ID for resource *'
   },
   {
-    name: 'external OAI wildcard resource requires a resource account',
+    name: 'external OAI wildcard resource uses the external-principal restriction',
     data: '3',
     variant: 'externalPrincipal',
     request: {
@@ -89,10 +89,10 @@ const simulateIntegrationTest: {
       simulationMode: 'Discovery'
     },
     expected: 'ImplicitlyDenied',
-    expectedError: 'Unable to find account ID for resource *'
+    expectedError: 'External principal simulations do not support wildcard-only actions.'
   },
   {
-    name: 'external OAI wildcard resource with supplied account returns a denial',
+    name: 'external OAI wildcard resource with supplied account retains the restriction',
     data: '3',
     variant: 'externalPrincipal',
     request: {
@@ -103,10 +103,11 @@ const simulateIntegrationTest: {
       customContextKeys: {},
       simulationMode: 'Discovery'
     },
-    expected: 'ImplicitlyDenied'
+    expected: 'ImplicitlyDenied',
+    expectedError: 'External principal simulations do not support wildcard-only actions.'
   },
   {
-    name: 'external OAI returns a denial for a wildcard-only action with supplied resource account',
+    name: 'external OAI wildcard-only action with supplied resource account retains the restriction',
     data: '3',
     variant: 'externalPrincipal',
     request: {
@@ -116,7 +117,8 @@ const simulateIntegrationTest: {
       customContextKeys: {},
       simulationMode: 'Discovery'
     },
-    expected: 'ImplicitlyDenied'
+    expected: 'ImplicitlyDenied',
+    expectedError: 'External principal simulations do not support wildcard-only actions.'
   },
   {
     name: 'CloudFront OAC service principal retains its distinct bucket-policy grant',
