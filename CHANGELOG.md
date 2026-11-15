@@ -1,3 +1,10 @@
+## [0.1.204](https://github.com/act-security-labs/iam-lens/compare/v0.1.203...v0.1.204) (2026-11-15)
+
+
+### Bug Fixes
+
+* allow wildcard-only OAI simulations ([#260](https://github.com/act-security-labs/iam-lens/issues/260)) ([2dbd9eb](https://github.com/act-security-labs/iam-lens/commit/2dbd9ebec056687b0ff8054f7058cf9b2d194ec6))
+
 ## [0.1.203](https://github.com/act-security-labs/iam-lens/compare/v0.1.202...v0.1.203) (2026-11-14)
 
 ## [0.1.202](https://github.com/act-security-labs/iam-lens/compare/v0.1.201...v0.1.202) (2026-11-13)
