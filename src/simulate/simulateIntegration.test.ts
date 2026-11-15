@@ -65,13 +65,41 @@ const simulateIntegrationTest: {
     expected: 'ImplicitlyDenied'
   },
   {
-    name: 'external OAI returns a denial for a wildcard-only action with unknown account',
+    name: 'collected OAI wildcard resource requires a resource account',
+    data: '3',
+    request: {
+      action: 's3:ListAllMyBuckets',
+      principal: 'arn:aws:cloudfront::400000000002:origin-access-identity/E123EXAMPLE',
+      resourceArn: '*',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ImplicitlyDenied',
+    expectedError: 'Unable to find account ID for resource *'
+  },
+  {
+    name: 'external OAI wildcard resource requires a resource account',
     data: '3',
     variant: 'externalPrincipal',
     request: {
       action: 's3:ListAllMyBuckets',
       principal: 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E999EXAMPLE',
       resourceArn: '*',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ImplicitlyDenied',
+    expectedError: 'Unable to find account ID for resource *'
+  },
+  {
+    name: 'external OAI wildcard resource with supplied account returns a denial',
+    data: '3',
+    variant: 'externalPrincipal',
+    request: {
+      action: 's3:ListAllMyBuckets',
+      principal: 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E999EXAMPLE',
+      resourceArn: '*',
+      resourceAccount: '400000000003',
       customContextKeys: {},
       simulationMode: 'Discovery'
     },

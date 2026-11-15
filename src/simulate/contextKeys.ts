@@ -324,18 +324,15 @@ export async function createContextKeys(
   }
 
   //Resource context keys
-  if (
-    simulationRequest.resourceAccount &&
-    actionSupportsAwsResourceInfoContextKeys(simulationRequest.action)
-  ) {
-    contextKeys['aws:ResourceAccount'] = simulationRequest.resourceAccount
+  if (actionSupportsAwsResourceInfoContextKeys(simulationRequest.action)) {
+    contextKeys['aws:ResourceAccount'] = simulationRequest.resourceAccount!
 
-    const resourceOrgId = await collectClient.getOrgIdForAccount(simulationRequest.resourceAccount)
+    const resourceOrgId = await collectClient.getOrgIdForAccount(simulationRequest.resourceAccount!)
     if (resourceOrgId) {
       contextKeys['aws:ResourceOrgID'] = resourceOrgId
 
       const orgStructure = await collectClient.getOrgUnitHierarchyForAccount(
-        simulationRequest.resourceAccount
+        simulationRequest.resourceAccount!
       )
 
       contextKeys['aws:ResourceOrgPaths'] = makeOrgPaths(resourceOrgId, orgStructure)
