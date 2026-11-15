@@ -411,10 +411,6 @@ async function simulateRequestInternal(
     throw new Error(`Virtual principal ${simulationRequest.principal} must contain an account ID.`)
   }
 
-  if (actionDetails.isWildcardOnly && isOai) {
-    throw new Error('CloudFront OAI simulations do not support wildcard-only actions.')
-  }
-
   if (
     actionDetails.isWildcardOnly &&
     (variant === 'anonymous' ||
@@ -462,17 +458,24 @@ async function simulateRequestInternal(
   }
 
   if (actionDetails.isWildcardOnly) {
-    simulationRequest.resourceAccount = splitArnParts(simulationRequest.principal!).accountId
+    if (isOai) {
+      if (!simulationRequest.resourceArn) {
+        simulationRequest.resourceAccount ??= collectedOai?.accountId
+      }
+    } else {
+      simulationRequest.resourceAccount = splitArnParts(simulationRequest.principal!).accountId
+    }
   }
 
   if (!simulationRequest.resourceAccount && !simulationRequest.resourceArn) {
-    throw new Error(
-      'Non wildcard actions require a resource ARN or resource account to be specified.'
+    throw new Error('A resource ARN or resource account must be specified.')
+  }
+  if (!simulationRequest.resourceAccount && simulationRequest.resourceArn) {
+    simulationRequest.resourceAccount = await getAccountIdForResource(
+      collectClient,
+      simulationRequest.resourceArn
     )
   }
-  simulationRequest.resourceAccount =
-    simulationRequest.resourceAccount ||
-    (await getAccountIdForResource(collectClient, simulationRequest.resourceArn!))
 
   if (!simulationRequest.resourceAccount) {
     throw new Error(`Unable to find account ID for resource ${simulationRequest.resourceArn}`)
@@ -622,6 +625,10 @@ async function principalPoliciesForVariant(
 
   const principalArn = request.principal!
   if (variant === 'virtualPrincipal') {
+    if (isCloudFrontOriginAccessUserArn(principalArn)) {
+      // Match the collected OAI path: the owner's IAM policies are not OAI policies.
+      return emptyPrincipalPolicyInputs()
+    }
     const accountId = splitArnParts(principalArn).accountId
     if (!accountId) {
       throw new Error(`Virtual principal ${principalArn} must contain an account ID.`)

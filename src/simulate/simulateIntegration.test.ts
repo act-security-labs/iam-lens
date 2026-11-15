@@ -31,6 +31,96 @@ const simulateIntegrationTest: {
   expectedPatterns?: { pattern: string; result: EvaluationResult }[]
 }[] = [
   {
+    name: 'collected OAI resource ARN returns a denial for a wildcard-only action',
+    data: '3',
+    request: {
+      action: 's3:ListAllMyBuckets',
+      principal: 'arn:aws:cloudfront::400000000002:origin-access-identity/E123EXAMPLE',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ImplicitlyDenied'
+  },
+  {
+    name: 'collected OAI policy ARN returns a denial for a wildcard-only action',
+    data: '3',
+    request: {
+      action: 's3:ListAllMyBuckets',
+      principal: 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E123EXAMPLE',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ImplicitlyDenied'
+  },
+  {
+    name: 'virtual collected OAI returns a denial for a wildcard-only action',
+    data: '3',
+    variant: 'virtualPrincipal',
+    request: {
+      action: 's3:ListAllMyBuckets',
+      principal: 'arn:aws:cloudfront::400000000002:origin-access-identity/E123EXAMPLE',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ImplicitlyDenied'
+  },
+  {
+    name: 'collected OAI wildcard resource requires a resource account',
+    data: '3',
+    request: {
+      action: 's3:ListAllMyBuckets',
+      principal: 'arn:aws:cloudfront::400000000002:origin-access-identity/E123EXAMPLE',
+      resourceArn: '*',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ImplicitlyDenied',
+    expectedError: 'Unable to find account ID for resource *'
+  },
+  {
+    name: 'external OAI wildcard resource uses the external-principal restriction',
+    data: '3',
+    variant: 'externalPrincipal',
+    request: {
+      action: 's3:ListAllMyBuckets',
+      principal: 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E999EXAMPLE',
+      resourceArn: '*',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ImplicitlyDenied',
+    expectedError: 'External principal simulations do not support wildcard-only actions.'
+  },
+  {
+    name: 'external OAI wildcard resource with supplied account retains the restriction',
+    data: '3',
+    variant: 'externalPrincipal',
+    request: {
+      action: 's3:ListAllMyBuckets',
+      principal: 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E999EXAMPLE',
+      resourceArn: '*',
+      resourceAccount: '400000000003',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ImplicitlyDenied',
+    expectedError: 'External principal simulations do not support wildcard-only actions.'
+  },
+  {
+    name: 'external OAI wildcard-only action with supplied resource account retains the restriction',
+    data: '3',
+    variant: 'externalPrincipal',
+    request: {
+      action: 's3:ListAllMyBuckets',
+      principal: 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E999EXAMPLE',
+      resourceAccount: '400000000003',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expected: 'ImplicitlyDenied',
+    expectedError: 'External principal simulations do not support wildcard-only actions.'
+  },
+  {
     name: 'CloudFront OAC service principal retains its distinct bucket-policy grant',
     data: '3',
     request: {
