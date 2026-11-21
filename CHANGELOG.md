@@ -1,3 +1,5 @@
+## [0.1.205](https://github.com/act-security-labs/iam-lens/compare/v0.1.204...v0.1.205) (2026-11-21)
+
 ## [0.1.204](https://github.com/act-security-labs/iam-lens/compare/v0.1.203...v0.1.204) (2026-11-15)
 
 
