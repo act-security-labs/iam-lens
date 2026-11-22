@@ -24,8 +24,15 @@ describe('SharedArrayBufferMainCache', () => {
       await cache.withCache(`key-${i}`, async () => payload(i))
     }
 
-    //Then the cache holds no more than the cap
+    //Then the cache is full up to the cap and still serves the latest key
     expect(cache.byteLength).toBeLessThanOrEqual(entryBytes * 10)
+    expect(cache.byteLength).toBeGreaterThan(entryBytes * 9)
+    let refetched = false
+    await cache.withCache('key-999', async () => {
+      refetched = true
+      return payload(999)
+    })
+    expect(refetched).toBe(false)
   })
 
   it('keeps the cached bytes within maxBytes as workers save entries', () => {
@@ -45,8 +52,34 @@ describe('SharedArrayBufferMainCache', () => {
       })
     }
 
-    //Then the cache holds no more than the cap
+    //Then the cache holds no more than the cap and the latest save is a hit
     expect(cache.byteLength).toBeLessThanOrEqual(entryBytes * 10)
+    worker.emit('message', { type: 'getCache', cacheKey: 'key-999' })
+    expect(worker.posted[0].type).toBe('cacheHit')
+    expect(convertArrayBufferToObject(worker.posted[0].value)).toEqual(payload(999))
+  })
+
+  it('counts an overwritten key once', () => {
+    //Given a cache that fits two entries
+    const worker = new FakeWorker()
+    const entryBytes = convertObjectToArrayBuffer(payload(0)).byteLength
+    const cache = new SharedArrayBufferMainCache([worker as unknown as Worker], {
+      maxBytes: entryBytes * 2
+    })
+
+    //When two workers save the same key, then a second key is saved
+    for (const i of [0, 0, 1]) {
+      worker.emit('message', {
+        type: 'saveCache',
+        cacheKey: `key-${i}`,
+        value: convertObjectToArrayBuffer(payload(i))
+      })
+    }
+
+    //Then both keys fit and neither was evicted
+    expect(cache.byteLength).toBe(entryBytes * 2)
+    worker.emit('message', { type: 'getCache', cacheKey: 'key-0' })
+    expect(worker.posted[0].type).toBe('cacheHit')
   })
 
   it('evicts the least recently used entry first', async () => {
