@@ -88,6 +88,12 @@ export interface WhoCanProcessorConfig {
      * Defaults to 30.
      */
     maxRequestsInProgress?: number
+
+    /**
+     * The most bytes the cache of collected IAM data shared with worker threads may hold.
+     * Past it, the least recently used entries are evicted. Defaults to 256 MiB.
+     */
+    sharedCacheMaxBytes?: number
   }
 
   /** Optional plugin to wrap the collect client with a custom implementation. */
@@ -464,7 +470,9 @@ export class WhoCanProcessor {
     // call, which runs concurrently with the ready handshake. If the cache
     // listeners are not installed yet those messages are dropped and the worker
     // deadlocks waiting for a cache response.
-    const sharedCache = new SharedArrayBufferMainCache(workers)
+    const sharedCache = new SharedArrayBufferMainCache(workers, {
+      maxBytes: config.tuning?.sharedCacheMaxBytes
+    })
 
     // Wait for all workers to complete bootstrap and signal ready before
     // proceeding. This ensures bootstrap failures are caught reliably and
