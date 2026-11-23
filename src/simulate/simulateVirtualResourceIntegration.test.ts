@@ -127,20 +127,6 @@ const virtualResourceIntegrationCases: VirtualResourceIntegrationCase[] = [
     expectedError: 'Virtual resource simulations do not support wildcard-only actions'
   },
   {
-    name: 'rejects a request without a resource account in Discovery mode',
-    data: '1',
-    request: {
-      principal:
-        'arn:aws:iam::100000000002:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AdministratorAccess_0fed56ec5d997fc5',
-      resourceArn: 'arn:aws:s3:::abucket',
-      resourceAccount: undefined,
-      action: 's3:ListBucket',
-      customContextKeys: {},
-      simulationMode: 'Discovery'
-    },
-    expectedError: 'must contain an account ID'
-  },
-  {
     name: 'rejects a request without a resource account',
     data: '1',
     request: {

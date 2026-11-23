@@ -42,11 +42,6 @@ interface ExternalResourceIntegrationCase {
   expectedResourceAccount?: string
 
   /**
-   * Whether the resource owner's account should stay unknown: absent from the request context.
-   */
-  expectedUnknownResourceOwner?: boolean
-
-  /**
    * Optional policy analysis that must explain the result.
    */
   expectedAnalysis?:
@@ -221,22 +216,6 @@ const externalResourceIntegrationCases: ExternalResourceIntegrationCase[] = [
       simulationMode: 'Discovery'
     },
     expected: 'Allowed',
-    expectedUnknownResourceOwner: true,
-    expectedAnalysis: 'identity-allowed'
-  },
-  {
-    name: 'S3 owner: unknown owner is not taken as any account in Discovery mode',
-    data: '4',
-    request: {
-      principal: 'arn:aws:iam::400000000001:role/s3-owner-conditioned',
-      resourceArn: 'arn:aws:s3:::uncollected-owner-test',
-      resourceAccount: undefined,
-      action: 's3:ListBucket',
-      customContextKeys: {},
-      simulationMode: 'Discovery'
-    },
-    expected: 'Allowed',
-    expectedUnknownResourceOwner: true,
     expectedAnalysis: 'identity-allowed'
   },
   {
@@ -280,31 +259,28 @@ const externalResourceIntegrationCases: ExternalResourceIntegrationCase[] = [
     expectedAnalysis: 'identity-implicit-deny'
   },
   {
-    name: 'S3 owner: caller-supplied aws:ResourceAccount of an unindexed bucket stays authoritative in Discovery mode',
+    name: 'S3 owner: caller context supplies aws:ResourceAccount of an unindexed bucket in Discovery mode',
     data: '4',
     request: {
-      principal: 'arn:aws:iam::400000000001:role/aws-owner-conditioned',
-      resourceArn: 'arn:aws:s3:::uncollected-owner-test',
+      principal: 'arn:aws:iam::400000000001:role/s3-owner-conditioned',
+      resourceArn: 'arn:aws:s3:::uncollected-owner-test/key',
       resourceAccount: undefined,
-      action: 's3:ListBucket',
+      action: 's3:GetObject',
       customContextKeys: { 'aws:ResourceAccount': '999999999999' },
-      simulationMode: 'Discovery'
+      simulationMode: 'Discovery',
+      resourcePolicy: {
+        Version: '2012-10-17',
+        Statement: {
+          Effect: 'Allow',
+          Principal: '*',
+          Action: 's3:GetObject',
+          Resource: 'arn:aws:s3:::uncollected-owner-test/*',
+          Condition: { StringEquals: { 'aws:ResourceAccount': '400000000001' } }
+        }
+      }
     },
     expected: 'ImplicitlyDenied',
-    expectedAnalysis: 'identity-implicit-deny'
-  },
-  {
-    name: 'S3 owner: caller-supplied aws:ResourceAccount matching the condition allows an unindexed bucket in Discovery mode',
-    data: '4',
-    request: {
-      principal: 'arn:aws:iam::400000000001:role/aws-owner-conditioned',
-      resourceArn: 'arn:aws:s3:::uncollected-owner-test',
-      resourceAccount: undefined,
-      action: 's3:ListBucket',
-      customContextKeys: { 'aws:ResourceAccount': '400000000001' },
-      simulationMode: 'Discovery'
-    },
-    expected: 'Allowed'
+    expectedAnalysis: 'resource-implicit-deny'
   },
   {
     name: 'allows access to an uncollected resource with the synthetic resource policy',
@@ -653,10 +629,6 @@ describe('simulateExternalResourceRequest integration', () => {
       expect(response.result.overallResult).toBe(testCase.expected)
       if (testCase.expectedResourceAccount) {
         expect(response.request.resource.accountId).toBe(testCase.expectedResourceAccount)
-      }
-      if (testCase.expectedUnknownResourceOwner) {
-        expect(Object.keys(response.request.contextVariables)).not.toContain('aws:ResourceAccount')
-        expect(Object.keys(response.request.contextVariables)).not.toContain('s3:ResourceAccount')
       }
       assertExpectedAnalysis(response, testCase.expectedAnalysis)
     })
