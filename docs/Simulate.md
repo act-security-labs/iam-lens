@@ -87,6 +87,8 @@ iam-lens simulate \
   --resource-policy ./external-bucket-policy.json
 ```
 
+When the ARN names no account (such as an S3 bucket or object) and neither `--resource-account` nor the dataset supplies one, a Discovery-mode external-resource simulation still runs: it evaluates the request as cross-account and treats `aws:ResourceAccount`, `s3:ResourceAccount`, `aws:ResourceOrgID` and `aws:ResourceOrgPaths` as unknown, so a condition on the owner's account is not decided against a guess. Strict mode still requires the account.
+
 External-resource S3 simulations do not load bucket ABAC or Block Public Access metadata. Both default to disabled; `--s3-abac-override enabled` can explicitly enable S3 ABAC evaluation.
 
 The three variant flags are mutually exclusive. Anonymous and external-resource simulations require `--resource`. `--resource-policy` is valid only with `--external-resource`.

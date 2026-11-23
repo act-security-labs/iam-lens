@@ -1297,6 +1297,19 @@ const simulateIntegrationTest: {
     expected: 'ExplicitlyDenied'
   },
   {
+    name: 'an unindexed bucket still requires its owner in Discovery mode',
+    data: '4',
+    request: {
+      resourceArn: 'arn:aws:s3:::uncollected-owner-test/key',
+      resourceAccount: undefined,
+      action: 's3:GetObject',
+      principal: 'arn:aws:iam::400000000001:role/s3-owner-conditioned',
+      customContextKeys: {},
+      simulationMode: 'Discovery'
+    },
+    expectedError: 'Unable to find account ID for resource arn:aws:s3:::uncollected-owner-test/key'
+  },
+  {
     name: 'foundation model service principal cannot infer an account',
     data: '1',
     request: {

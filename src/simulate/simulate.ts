@@ -477,7 +477,9 @@ async function simulateRequestInternal(
     )
   }
 
-  if (!simulationRequest.resourceAccount) {
+  const resourceOwnerIsUnknown =
+    !simulationRequest.resourceAccount && resourceOwnerMayBeUnknown(variant, simulationRequest)
+  if (!simulationRequest.resourceAccount && !resourceOwnerIsUnknown) {
     throw new Error(`Unable to find account ID for resource ${simulationRequest.resourceArn}`)
   }
 
@@ -513,7 +515,7 @@ async function simulateRequestInternal(
     action: simulationRequest.action,
     resource: {
       resource: simulationRequest.resourceArn || '*',
-      accountId: simulationRequest.resourceAccount
+      accountId: simulationRequest.resourceAccount ?? unknownResourceAccount
     },
     principal: variant === 'anonymous' ? anonymousPrincipal : simulationRequest.principal!,
     contextVariables: {}
@@ -581,7 +583,12 @@ async function simulateRequestInternal(
     discoveryConstraintForGeneratedKey(keyName, simulationRequest, mutableExistingPrincipalTagKeys)
   )
   const discoveryContextKeyConstraints = mergeDiscoveryContextKeyConstraints(
-    generatedDiscoveryContextKeyConstraints,
+    resourceOwnerIsUnknown
+      ? mergeDiscoveryContextKeyConstraints(
+          generatedDiscoveryContextKeyConstraints,
+          unknownResourceOwnerConstraints
+        )
+      : generatedDiscoveryContextKeyConstraints,
     simulationRequest.discoveryContextKeyConstraints ?? []
   )
 
@@ -900,6 +907,46 @@ function makeGeneratedDiscoveryContextKeyNames(
 function isTagContextKey(key: string): boolean {
   const slashIndex = key.indexOf('/')
   return slashIndex >= 3 && equalsIgnoreCase(key.slice(slashIndex - 3, slashIndex + 1), 'tag/')
+}
+
+/**
+ * The resource account iam-simulate receives when the owner of an external resource is unknown. It is not an account
+ * ID, so it never equals the principal's account and the request evaluates as cross-account.
+ */
+const unknownResourceAccount = 'unknown'
+
+/**
+ * Discovery constraints for an external resource whose owner is unknown: the owner's account is present but its value
+ * is unknown, and whether it belongs to an organization is unknown.
+ */
+const unknownResourceOwnerConstraints: DiscoveryContextKeyConstraint[] = [
+  { keyName: 'aws:ResourceAccount', presenceIsKnown: true, valueIsKnown: false },
+  { keyName: 'aws:ResourceOrgID', presenceIsKnown: false, valueIsKnown: false },
+  { keyName: 'aws:ResourceOrgPaths', presenceIsKnown: false, valueIsKnown: false }
+]
+
+/**
+ * Check whether a request may proceed without knowing the resource's owner.
+ *
+ * Only an external-resource request in Discovery mode qualifies: its resource-side policy is synthetic and needs no
+ * account. The resource must be a concrete ARN that names no account (such as an S3 bucket or object), so the owner is
+ * unknown only when neither the ARN nor the dataset can supply it.
+ *
+ * @param variant the simulation variant
+ * @param request the normalized request
+ * @returns true when the owner's account can remain unknown
+ */
+function resourceOwnerMayBeUnknown(
+  variant: SimulationVariant,
+  request: Pick<InternalSimulationRequest, 'resourceArn' | 'simulationMode'>
+): boolean {
+  return (
+    variant === 'externalResource' &&
+    request.simulationMode === 'Discovery' &&
+    request.resourceArn !== undefined &&
+    request.resourceArn.startsWith('arn:') &&
+    !splitArnParts(request.resourceArn).accountId
+  )
 }
 
 const awsSourceKeyPrefix = 'aws:source'
