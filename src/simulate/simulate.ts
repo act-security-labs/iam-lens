@@ -586,7 +586,9 @@ async function simulateRequestInternal(
     resourceOwnerIsUnknown
       ? mergeDiscoveryContextKeyConstraints(
           generatedDiscoveryContextKeyConstraints,
-          unknownResourceOwnerConstraints
+          unknownResourceOwnerConstraints.filter(
+            ({ keyName }) => !hasCustomContextKey(simulationRequest.customContextKeys, keyName)
+          )
         )
       : generatedDiscoveryContextKeyConstraints,
     simulationRequest.discoveryContextKeyConstraints ?? []

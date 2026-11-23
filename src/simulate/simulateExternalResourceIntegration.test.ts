@@ -280,6 +280,33 @@ const externalResourceIntegrationCases: ExternalResourceIntegrationCase[] = [
     expectedAnalysis: 'identity-implicit-deny'
   },
   {
+    name: 'S3 owner: caller-supplied aws:ResourceAccount of an unindexed bucket stays authoritative in Discovery mode',
+    data: '4',
+    request: {
+      principal: 'arn:aws:iam::400000000001:role/aws-owner-conditioned',
+      resourceArn: 'arn:aws:s3:::uncollected-owner-test',
+      resourceAccount: undefined,
+      action: 's3:ListBucket',
+      customContextKeys: { 'aws:ResourceAccount': '999999999999' },
+      simulationMode: 'Discovery'
+    },
+    expected: 'ImplicitlyDenied',
+    expectedAnalysis: 'identity-implicit-deny'
+  },
+  {
+    name: 'S3 owner: caller-supplied aws:ResourceAccount matching the condition allows an unindexed bucket in Discovery mode',
+    data: '4',
+    request: {
+      principal: 'arn:aws:iam::400000000001:role/aws-owner-conditioned',
+      resourceArn: 'arn:aws:s3:::uncollected-owner-test',
+      resourceAccount: undefined,
+      action: 's3:ListBucket',
+      customContextKeys: { 'aws:ResourceAccount': '400000000001' },
+      simulationMode: 'Discovery'
+    },
+    expected: 'Allowed'
+  },
+  {
     name: 'allows access to an uncollected resource with the synthetic resource policy',
     data: '2',
     request: {
