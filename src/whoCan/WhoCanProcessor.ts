@@ -163,6 +163,17 @@ export interface WhoCanProcessorRequest {
    */
   denyDetailsCallback?: (details: LightRequestAnalysis) => boolean
 
+  /**
+   * Optional callback that receives each allowed result as its simulation completes.
+   * When provided, allowed results are handed to the callback instead of being
+   * collected, and the settled result's `allowed` array is empty. Use this to keep
+   * memory bounded for resources with many allowed principals. Cannot be combined
+   * with `sort`. If the callback throws, the request settles with that error.
+   *
+   * @param allowed - One allowed principal/action result.
+   */
+  onAllowed?: (allowed: WhoCanAllowed) => void
+
   /** Optional scope to limit the set of principals tested. */
   principalScope?: WhoCanPrincipalScope
 
@@ -519,6 +530,10 @@ export class WhoCanProcessor {
     }
     if (this.draining) {
       throw new Error('Cannot enqueue while draining — waitForIdle() is in progress')
+    }
+
+    if (request.onAllowed && request.sort) {
+      throw new Error('onAllowed cannot be combined with sort: streamed results are not collected')
     }
 
     const requestId = generateRequestId()
@@ -1268,13 +1283,32 @@ export class WhoCanProcessor {
     state.simulationCount++
 
     if (result.status === 'fulfilled' && result.value) {
-      state.allowed.push(result.value)
+      if (state.request.onAllowed) {
+        this.deliverAllowed(state, result.value)
+      } else {
+        state.allowed.push(result.value)
+      }
     } else if (result.status === 'rejected') {
       log.error('Error running simulation', { error: result.reason })
       state.simulationErrors.push(result)
     }
 
     this.checkRequestCompletion(state)
+  }
+
+  /**
+   * Hands one allowed result to the request's onAllowed callback. A throwing
+   * callback settles the request as failed; later results are then discarded.
+   *
+   * @param state - The request the result belongs to.
+   * @param allowed - The allowed result.
+   */
+  private deliverAllowed(state: RequestState, allowed: WhoCanAllowed): void {
+    try {
+      state.request.onAllowed?.(allowed)
+    } catch (error) {
+      this.settleRequestAsError(state, error instanceof Error ? error : new Error(String(error)))
+    }
   }
 
   /**
