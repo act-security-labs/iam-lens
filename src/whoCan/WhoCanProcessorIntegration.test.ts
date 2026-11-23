@@ -66,6 +66,99 @@ async function runSingleRequest(
   }
 }
 describe('WhoCanProcessor Integration Tests', () => {
+  describe('WhoCanProcessor onAllowed', () => {
+    const request = {
+      actions: ['ec2:TerminateInstances'],
+      resource: 'arn:aws:ec2:us-east-1:100000000001:instance/i-1234567890abcdef0'
+    }
+    const key = (a: { principal: string; action: string }) => `${a.principal} ${a.action}`
+
+    async function collectedAllowed(workerThreads: number): Promise<string[]> {
+      let settled: WhoCanSettledEvent | undefined
+      await runSingleRequest({
+        tuning: { workerThreads },
+        request,
+        onRequestSettled: async (event) => {
+          settled = event
+        }
+      })
+      if (settled?.status !== 'fulfilled') throw new Error('expected a fulfilled settlement')
+      return settled.result.allowed.map(key).sort()
+    }
+
+    it.each([0, 1])(
+      'hands every allowed result to onAllowed instead of the settled result (workerThreads=%i)',
+      async (workerThreads) => {
+        //Given the allowed results the request collects without a callback
+        const expected = await collectedAllowed(workerThreads)
+        expect(expected.length).toBeGreaterThan(0)
+
+        //When the same request streams its allowed results
+        const streamed: string[] = []
+        let settled: WhoCanSettledEvent | undefined
+        await runSingleRequest({
+          tuning: { workerThreads },
+          request: { ...request, onAllowed: (allowed) => streamed.push(key(allowed)) },
+          onRequestSettled: async (event) => {
+            settled = event
+          }
+        })
+
+        //Then each allowed result reaches the callback once and none is collected
+        expect(streamed.sort()).toEqual(expected)
+        expect(settled?.status).toBe('fulfilled')
+        if (settled?.status === 'fulfilled') {
+          expect(settled.result.allowed).toEqual([])
+        }
+      }
+    )
+
+    it('settles the request with the error a throwing onAllowed raises', async () => {
+      //Given an onAllowed callback that throws
+      const settledEvents: WhoCanSettledEvent[] = []
+
+      //When the request runs
+      await runSingleRequest({
+        request: {
+          ...request,
+          onAllowed: () => {
+            throw new Error('sink full')
+          }
+        },
+        onRequestSettled: async (event) => {
+          settledEvents.push(event)
+        }
+      })
+
+      //Then the request settles once, as rejected with that error
+      expect(settledEvents).toHaveLength(1)
+      expect(settledEvents[0]?.status).toBe('rejected')
+      if (settledEvents[0]?.status === 'rejected') {
+        expect(settledEvents[0].error.message).toBe('sink full')
+      }
+    })
+
+    it('rejects onAllowed combined with sort', async () => {
+      //Given a processor
+      const processor = await WhoCanProcessor.create({
+        collectConfigs: getTestDatasetConfigs('1'),
+        partition: 'aws',
+        tuning: { workerThreads: 0 },
+        ignorePrincipalIndex: true,
+        onRequestSettled: async () => {}
+      })
+
+      try {
+        //When a request asks for both, Then enqueueing throws
+        expect(() =>
+          processor.enqueueWhoCan({ ...request, sort: true, onAllowed: () => {} })
+        ).toThrow('onAllowed cannot be combined with sort')
+      } finally {
+        await processor.shutdown()
+      }
+    })
+  })
+
   describe('WhoCanProcessor request draining', () => {
     it('drains queued scenarios after root preparation fails', async () => {
       //Given multiple anonymous scenarios are queued before a later principal-scope lookup fails
