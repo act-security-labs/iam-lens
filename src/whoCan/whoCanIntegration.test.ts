@@ -365,6 +365,35 @@ const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
     }
   },
   {
+    name: 'principal scope still reports policy grantees missing from collect data',
+    description:
+      'The policy names a collected OAI, an uncollected OAI and an unknown canonical user. Only the scoped OAI is simulated; the other two are reported as not found.',
+    data: '3',
+    request: {
+      resource: 'arn:aws:s3:::oai-unresolved-bucket/object',
+      actions: ['s3:GetObject'],
+      principalScope: {
+        principals: ['arn:aws:cloudfront::400000000002:origin-access-identity/E123EXAMPLE']
+      }
+    },
+    simulationCounts: { withIndex: 1, withoutIndex: 1 },
+    expected: {
+      who: [
+        {
+          principal: 'arn:aws:cloudfront::400000000002:origin-access-identity/E123EXAMPLE',
+          service: 's3',
+          action: 'GetObject',
+          level: 'read',
+          resourceType: 'object'
+        }
+      ],
+      principalsNotFound: [
+        'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E789MISSING',
+        'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc'
+      ]
+    }
+  },
+  {
     name: 'Lambda version uses matching parent function tags',
     data: '3',
     request: {
@@ -2851,7 +2880,7 @@ const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
     name: 'principalScope with specific principals limits to those principals',
     simulationCounts: { withoutIndex: 1, withIndex: 1 },
     description:
-      'Same as "shared with specific principals" but scope limits to just one of the cross-account principals. Missing principals from the resource policy are filtered out by the scope intersection.',
+      'Same as "shared with specific principals" but scope limits to just one of the cross-account principals. Missing principals from the resource policy are not simulated but are still reported as not found.',
     data: '1',
     request: {
       resource: 'arn:aws:s3:::who-can-principal',
@@ -2869,6 +2898,10 @@ const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
           service: 's3',
           resourceType: 'bucket'
         }
+      ],
+      principalsNotFound: [
+        'arn:aws:iam::999999999999:role/missing-role',
+        'arn:aws:sts::999999999999:federated-user/Bob'
       ]
     }
   },
@@ -2911,6 +2944,10 @@ const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
           service: 's3',
           resourceType: 'bucket'
         }
+      ],
+      principalsNotFound: [
+        'arn:aws:iam::999999999999:role/missing-role',
+        'arn:aws:sts::999999999999:federated-user/Bob'
       ]
     }
   },

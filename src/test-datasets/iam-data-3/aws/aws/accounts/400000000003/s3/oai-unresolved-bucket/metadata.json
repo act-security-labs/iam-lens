@@ -1,0 +1,5 @@
+{
+  "arn": "arn:aws:s3:::oai-unresolved-bucket",
+  "name": "oai-unresolved-bucket",
+  "region": "us-east-1"
+}
