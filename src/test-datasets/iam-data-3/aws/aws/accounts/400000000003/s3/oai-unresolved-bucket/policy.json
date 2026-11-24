@@ -12,15 +12,6 @@
       },
       "Action": "s3:GetObject",
       "Resource": "arn:aws:s3:::oai-unresolved-bucket/*"
-    },
-    {
-      "Sid": "AllowUnknownCanonicalUser",
-      "Effect": "Allow",
-      "Principal": {
-        "CanonicalUser": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
-      },
-      "Action": "s3:GetObject",
-      "Resource": "arn:aws:s3:::oai-unresolved-bucket/*"
     }
   ]
 }

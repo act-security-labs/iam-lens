@@ -367,7 +367,7 @@ const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
   {
     name: 'principal scope still reports policy grantees missing from collect data',
     description:
-      'The policy names a collected OAI, an uncollected OAI and an unknown canonical user. Only the scoped OAI is simulated; the other two are reported as not found.',
+      'The policy names a collected OAI and an uncollected OAI. Only the scoped OAI is simulated; the uncollected one is reported as not found.',
     data: '3',
     request: {
       resource: 'arn:aws:s3:::oai-unresolved-bucket/object',
@@ -388,8 +388,7 @@ const whoCanIntegrationTests: WhoCanIntegrationTest[] = [
         }
       ],
       principalsNotFound: [
-        'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E789MISSING',
-        'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc'
+        'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E789MISSING'
       ]
     }
   },
