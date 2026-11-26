@@ -1,3 +1,10 @@
+## [0.1.206](https://github.com/act-security-labs/iam-lens/compare/v0.1.205...v0.1.206) (2026-11-26)
+
+
+### Bug Fixes
+
+* share identical condition and grant values across whoCan allowed results ([#267](https://github.com/act-security-labs/iam-lens/issues/267)) ([1f95010](https://github.com/act-security-labs/iam-lens/commit/1f95010d25530e09fd64eba3c7a921c1ec264ebe))
+
 ## [0.1.205](https://github.com/act-security-labs/iam-lens/compare/v0.1.204...v0.1.205) (2026-11-21)
 
 ## [0.1.204](https://github.com/act-security-labs/iam-lens/compare/v0.1.203...v0.1.204) (2026-11-15)
