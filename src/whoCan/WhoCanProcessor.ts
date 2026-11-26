@@ -36,6 +36,7 @@ import {
   isIamUserArn,
   isServicePrincipal
 } from '@actsecurity/iam-utils'
+import { AllowedValueSharer } from './allowedValueSharer.js'
 import { buildPrincipalArnFilter, principalMatchesFilter } from './principalArnFilter.js'
 import { actionsThatDoNotAutomaticallyTrustTheCurrentAccount } from './untrustingActions.js'
 import { type WorkerBootstrapPlugin } from './workerBootstrapPlugin.js'
@@ -254,6 +255,9 @@ interface RequestState {
 
   /** Accumulated allowed results for this request. */
   allowed: WhoCanAllowed[]
+
+  /** Shares identical values across this request's allowed results. */
+  allowedValues: AllowedValueSharer
 
   /** Accumulated principals not found during preparation. */
   principalsNotFound: string[]
@@ -861,6 +865,7 @@ export class WhoCanProcessor {
       completed: 0,
       pendingPreparationJobs: 0,
       allowed: [],
+      allowedValues: new AllowedValueSharer(),
       principalsNotFound: [],
       accountsNotFound: [],
       organizationsNotFound: [],
@@ -1268,7 +1273,7 @@ export class WhoCanProcessor {
     state.simulationCount++
 
     if (result.status === 'fulfilled' && result.value) {
-      state.allowed.push(result.value)
+      state.allowed.push(state.allowedValues.share(result.value))
     } else if (result.status === 'rejected') {
       log.error('Error running simulation', { error: result.reason })
       state.simulationErrors.push(result)
