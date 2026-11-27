@@ -143,7 +143,9 @@ export interface ResourceAccessRequest {
   /**
    * Optional scope to limit the set of principals tested. When provided, the
    * scope is intersected with the resource-policy-derived scope to narrow the
-   * search space.
+   * search space. Resource-policy principals outside the scope are not tested,
+   * but those missing from the collected data are still reported in
+   * `principalsNotFound`.
    */
   principalScope?: WhoCanPrincipalScope
 

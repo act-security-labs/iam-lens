@@ -322,6 +322,31 @@ function getNumberOfWorkers(overrideValue: number | undefined): number {
 }
 
 /**
+ * Finds the collected principal for a principal named in a resource policy.
+ *
+ * @param collectClient the collect client used to look up the principal
+ * @param principal the principal ARN, service principal, or other value from the resource policy
+ * @returns the principal to simulate and report, or undefined when collect data does not hold it
+ */
+async function findCollectedPolicyPrincipal(
+  collectClient: IamCollectClient,
+  principal: string
+): Promise<Pick<WhoCanWorkItem, 'principal' | 'resultPrincipal'> | undefined> {
+  if (isCloudFrontIdentityArn(principal) || isCloudFrontOriginAccessUserArn(principal)) {
+    const identity = await collectClient.getCloudFrontOriginAccessIdentity(principal)
+    return identity ? { principal: identity.arn, resultPrincipal: identity.arn } : undefined
+  }
+  if (isServicePrincipal(principal)) {
+    return { principal }
+  }
+  if (isIamUserArn(principal) || isIamRoleArn(principal) || isAssumedRoleArn(principal)) {
+    const resolvedPrincipal = await collectClient.resolvePrincipalArn(principal)
+    return resolvedPrincipal ? { principal, resultPrincipal: resolvedPrincipal } : undefined
+  }
+  return undefined
+}
+
+/**
  * A queue-first bulk processor that accepts many whoCan requests, expands
  * scenarios on the main thread, and feeds a shared simulation scheduler used
  * by worker threads and an optional main-thread runner.
@@ -1165,7 +1190,15 @@ export class WhoCanProcessor {
     // deduplicate — the same principal can appear in the list more than once
     // when multiple statements reference it, e.g. an explicit Principal element
     // and a StringEquals aws:PrincipalArn condition).
-    for (const principal of specificPrincipalSet) {
+    //
+    // Resource policy principals outside the principal scope are not simulated,
+    // but are still looked up so the ones collect data does not hold are reported
+    // in principalsNotFound, the same as without a scope.
+    const policyPrincipalsOutsideScope = accountsToCheck.specificPrincipals.filter(
+      (principal) => !specificPrincipalSet.has(principal)
+    )
+    for (const principal of new Set([...specificPrincipalSet, ...policyPrincipalsOutsideScope])) {
+      const simulate = specificPrincipalSet.has(principal)
       state.pendingPreparationJobs++
       this.preparationQueue.enqueue({
         properties: {},
@@ -1173,60 +1206,21 @@ export class WhoCanProcessor {
           try {
             if (state.settled) return
 
-            if (isCloudFrontIdentityArn(principal) || isCloudFrontOriginAccessUserArn(principal)) {
-              const identity = await collectClient.getCloudFrontOriginAccessIdentity(principal)
-              if (!identity) {
-                state.principalsNotFound.push(principal)
-              } else {
-                for (const action of actions) {
-                  this.enqueueScenario(state, {
-                    simulationVariant: 'authenticated',
-                    resource,
-                    action,
-                    principal: identity.arn,
-                    resultPrincipal: identity.arn,
-                    resourceAccount: scenarioResourceAccount,
-                    discoveryContextKeyConstraints: state.request.discoveryContextKeyConstraints,
-                    collectDenyDetails: !!state.denyDetailsCallback
-                  })
-                }
-              }
-            } else if (isServicePrincipal(principal)) {
+            const collectedPrincipal = await findCollectedPolicyPrincipal(collectClient, principal)
+            if (!collectedPrincipal) {
+              state.principalsNotFound.push(principal)
+            } else if (simulate) {
               for (const action of actions) {
                 this.enqueueScenario(state, {
                   simulationVariant: 'authenticated',
                   resource,
                   action,
-                  principal,
+                  ...collectedPrincipal,
                   resourceAccount: scenarioResourceAccount,
                   discoveryContextKeyConstraints: state.request.discoveryContextKeyConstraints,
                   collectDenyDetails: !!state.denyDetailsCallback
                 })
               }
-            } else if (
-              isIamUserArn(principal) ||
-              isIamRoleArn(principal) ||
-              isAssumedRoleArn(principal)
-            ) {
-              const resolvedPrincipal = await collectClient.resolvePrincipalArn(principal)
-              if (!resolvedPrincipal) {
-                state.principalsNotFound.push(principal)
-              } else {
-                for (const action of actions) {
-                  this.enqueueScenario(state, {
-                    simulationVariant: 'authenticated',
-                    resource,
-                    action,
-                    principal,
-                    resultPrincipal: resolvedPrincipal,
-                    resourceAccount: scenarioResourceAccount,
-                    discoveryContextKeyConstraints: state.request.discoveryContextKeyConstraints,
-                    collectDenyDetails: !!state.denyDetailsCallback
-                  })
-                }
-              }
-            } else {
-              state.principalsNotFound.push(principal)
             }
           } catch (err) {
             this.settleRequestAsError(state, err instanceof Error ? err : new Error(String(err)))
